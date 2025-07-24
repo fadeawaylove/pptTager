@@ -16,7 +16,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
-    }
+    },
+    autoHideMenuBar: true
   });
 
   mainWindow.loadFile('index.html');

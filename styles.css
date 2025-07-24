@@ -178,24 +178,53 @@ body {
     box-shadow: 0 5px 20px rgba(0,0,0,0.15);
 }
 
-.file-icon {
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 20px;
-    margin-bottom: 15px;
-}
+
 
 .file-name {
     font-weight: 600;
     margin-bottom: 8px;
     color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    position: relative;
+    cursor: pointer;
+}
+
+.file-name:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: normal;
     word-break: break-word;
+    z-index: 1000;
+    max-width: 300px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    animation: fadeIn 0.3s ease-in-out;
+    animation-delay: 2s;
+    animation-fill-mode: both;
+    opacity: 0;
+}
+
+.file-name:hover::after {
+    animation: fadeInDelayed 0.3s ease-in-out 2s forwards;
+}
+
+@keyframes fadeInDelayed {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .file-info {

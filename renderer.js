@@ -197,8 +197,7 @@ function createFileCard(file) {
     const modifiedDate = new Date(file.modified).toLocaleDateString('zh-CN');
     
     card.innerHTML = `
-        <div class="file-icon">📄</div>
-        <div class="file-name">${file.name}</div>
+        <div class="file-name" title="${file.name}">${file.name}</div>
         <div class="file-info">
             大小: ${fileSize} | 修改时间: ${modifiedDate}
         </div>
@@ -206,9 +205,9 @@ function createFileCard(file) {
             ${fileTags.map(tag => `<span class="file-tag">${tag}</span>`).join('')}
         </div>
         <div class="file-actions">
-            <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\\/g, '\\\\')}')">预览</button>
-            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\\/g, '\\\\')}')">编辑标签</button>
-            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\\/g, '\\\\')}')">打开文件</button>
+            <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\/g, '\\\\')}')">预览</button>
+            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\/g, '\\\\')}')">编辑标签</button>
+            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\/g, '\\\\')}')">打开文件</button>
         </div>
     `;
     
