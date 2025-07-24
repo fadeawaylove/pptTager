@@ -5,9 +5,16 @@ on:
     tags:
       - 'v*.*.*'  # 当推送版本标签时触发，如 v1.0.0
 
+permissions:
+  contents: write
+
 jobs:
-  build-and-release:
-    runs-on: windows-latest
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    
+    runs-on: ${{ matrix.os }}
     
     steps:
     - name: Checkout code
@@ -22,29 +29,65 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
-    - name: Build application
-      run: npm run pack
+    - name: Build and package (Windows)
+      if: matrix.os == 'windows-latest'
+      run: npm run build:win
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Build and package (macOS)
+      if: matrix.os == 'macos-latest'
+      run: npm run build:mac
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Build and package (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: npm run build:linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Upload artifacts (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: dist/*.exe
+        
+    - name: Upload artifacts (macOS)
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-build
+        path: dist/*.dmg
+        
+    - name: Upload artifacts (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-build
+        path: dist/*.AppImage
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
       
-    - name: Create ZIP archive
-      run: |
-        Compress-Archive -Path "dist\PPT-Tagger-win32-x64\*" -DestinationPath "PPT-Tagger-win32-x64.zip"
-      shell: powershell
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
       
     - name: Get version from tag
       id: get_version
       run: |
-        $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
-        echo "version=$version" >> $env:GITHUB_OUTPUT
-      shell: powershell
-      
+        echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref }}
-        release_name: PPT标签管理器 v${{ steps.get_version.outputs.version }}
+        name: PPT标签管理器 v${{ steps.get_version.outputs.version }}
         body: |
           ## PPT标签管理器 v${{ steps.get_version.outputs.version }}
           
@@ -55,20 +98,20 @@ jobs:
           - 现代化用户界面
           
           ### 下载说明
-          下载 `PPT-Tagger-win32-x64.zip` 文件，解压后运行 `PPT-Tagger.exe` 即可使用。
+          - **Windows**: 下载 `.exe` 文件直接安装
+          - **macOS**: 下载 `.dmg` 文件安装
+          - **Linux**: 下载 `.AppImage` 文件，添加执行权限后运行
           
           ### 系统要求
           - Windows 10/11 (64位)
+          - macOS 10.15+ (64位)
+          - Linux (64位)
           - 可选：LibreOffice（用于PPT预览功能）
+        files: |
+          windows-build/*
+          macos-build/*
+          linux-build/*
         draft: false
         prerelease: false
-        
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./PPT-Tagger-win32-x64.zip
-        asset_name: PPT-Tagger-win32-x64.zip
-        asset_content_type: application/zip
