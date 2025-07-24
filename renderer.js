@@ -205,9 +205,9 @@ function createFileCard(file) {
             ${fileTags.map(tag => `<span class="file-tag">${tag}</span>`).join('')}
         </div>
         <div class="file-actions">
-            <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\/g, '\\\\')}')">预览</button>
-            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\/g, '\\\\')}')">编辑标签</button>
-            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\/g, '\\\\')}')">打开文件</button>
+            <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\\/g, '\\\\')}')">预览</button>
+            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\\/g, '\\\\')}')">编辑标签</button>
+            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\\/g, '\\\\')}')">打开文件</button>
         </div>
     `;
     
