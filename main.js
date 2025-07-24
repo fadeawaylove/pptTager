@@ -5,8 +5,8 @@ const { exec, spawn } = require('child_process');
 const os = require('os');
 
 let mainWindow;
-const DATA_FILE = path.join(__dirname, 'ppt-tags.json');
-const SETTINGS_FILE = path.join(__dirname, 'app-settings.json');
+const DATA_FILE = path.join(app.getPath('userData'), 'ppt-tags.json');
+const SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json');
 
 // 创建主窗口
 function createWindow() {
