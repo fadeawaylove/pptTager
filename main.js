@@ -108,8 +108,9 @@ ipcMain.handle('scan-ppt-files', async (event, folderPath) => {
 // 加载标签数据
 ipcMain.handle('load-tags', async () => {
   try {
-    if (await fs.pathExists(DATA_FILE)) {
-      const data = await fs.readJson(DATA_FILE);
+    const tagsFile = getActualTagsPath();
+    if (await fs.pathExists(tagsFile)) {
+      const data = await fs.readJson(tagsFile);
       return data;
     }
     return {};
@@ -122,7 +123,10 @@ ipcMain.handle('load-tags', async () => {
 // 保存标签数据
 ipcMain.handle('save-tags', async (event, tagsData) => {
   try {
-    await fs.writeJson(DATA_FILE, tagsData, { spaces: 2 });
+    const tagsFile = getActualTagsPath();
+    // 确保目录存在
+    await fs.ensureDir(path.dirname(tagsFile));
+    await fs.writeJson(tagsFile, tagsData, { spaces: 2 });
     return true;
   } catch (error) {
     console.error('保存标签数据时出错:', error);
@@ -174,7 +178,7 @@ ipcMain.handle('get-ppt-preview', async (event, filePath) => {
     
     // 生成缓存文件路径
     const fileName = path.basename(filePath, path.extname(filePath));
-    const cacheDir = path.join(os.tmpdir(), 'ppt-previews');
+    const cacheDir = getActualCachePath();
     const outputPath = path.join(cacheDir, `${fileName}.png`);
     
     // 检查缓存是否存在且是最新的
@@ -333,6 +337,237 @@ function escapeXml(unsafe) {
       case '"': return '&quot;';
     }
   });
+}
+
+// 设置相关的IPC处理程序
+
+// 获取当前设置
+ipcMain.handle('get-current-settings', async () => {
+  try {
+    let settings = {};
+    if (await fs.pathExists(SETTINGS_FILE)) {
+      settings = await fs.readJson(SETTINGS_FILE);
+    }
+    
+    // 获取当前实际使用的路径
+    const currentCachePath = settings.customCachePath || path.join(os.tmpdir(), 'ppt-previews');
+    const currentTagsPath = settings.customTagsPath || DATA_FILE;
+    
+    return {
+      cachePath: currentCachePath,
+      tagsPath: currentTagsPath
+    };
+  } catch (error) {
+    console.error('获取当前设置失败:', error);
+    return {
+      cachePath: path.join(os.tmpdir(), 'ppt-previews'),
+      tagsPath: DATA_FILE
+    };
+  }
+});
+
+// 选择缓存路径
+ipcMain.handle('select-cache-path', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: '选择预览缓存文件夹'
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+// 选择标签文件路径
+ipcMain.handle('select-tags-path', async () => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '选择标签文件保存位置',
+    defaultPath: 'ppt-tags.json',
+    filters: [
+      { name: 'JSON文件', extensions: ['json'] },
+      { name: '所有文件', extensions: ['*'] }
+    ]
+  });
+  
+  if (!result.canceled && result.filePath) {
+    return result.filePath;
+  }
+  return null;
+});
+
+// 重置缓存路径
+ipcMain.handle('reset-cache-path', async () => {
+  try {
+    let settings = {};
+    if (await fs.pathExists(SETTINGS_FILE)) {
+      settings = await fs.readJson(SETTINGS_FILE);
+    }
+    
+    // 删除自定义缓存路径设置
+    delete settings.customCachePath;
+    await fs.writeJson(SETTINGS_FILE, settings, { spaces: 2 });
+    
+    const defaultPath = path.join(os.tmpdir(), 'ppt-previews');
+    return {
+      success: true,
+      path: defaultPath
+    };
+  } catch (error) {
+    console.error('重置缓存路径失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 重置标签文件路径
+ipcMain.handle('reset-tags-path', async () => {
+  try {
+    let settings = {};
+    if (await fs.pathExists(SETTINGS_FILE)) {
+      settings = await fs.readJson(SETTINGS_FILE);
+    }
+    
+    // 删除自定义标签路径设置
+    delete settings.customTagsPath;
+    await fs.writeJson(SETTINGS_FILE, settings, { spaces: 2 });
+    
+    return {
+      success: true,
+      path: DATA_FILE
+    };
+  } catch (error) {
+    console.error('重置标签文件路径失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 保存设置
+ipcMain.handle('save-settings', async (event, newSettings) => {
+  try {
+    let settings = {};
+    if (await fs.pathExists(SETTINGS_FILE)) {
+      settings = await fs.readJson(SETTINGS_FILE);
+    }
+    
+    // 获取当前使用的路径
+    const currentTagsPath = getActualTagsPath();
+    
+    // 数据迁移逻辑
+    if (newSettings.tagsPath && newSettings.tagsPath !== currentTagsPath) {
+      console.log('检测到标签文件路径更改，开始数据迁移...');
+      
+      // 检查原文件是否存在
+      if (await fs.pathExists(currentTagsPath)) {
+        try {
+          // 读取原有数据
+          const oldData = await fs.readJson(currentTagsPath);
+          
+          // 确保新路径的目录存在
+          await fs.ensureDir(path.dirname(newSettings.tagsPath));
+          
+          // 将数据写入新位置
+          await fs.writeJson(newSettings.tagsPath, oldData, { spaces: 2 });
+          
+          console.log('标签数据迁移成功:', currentTagsPath, '->', newSettings.tagsPath);
+        } catch (migrationError) {
+          console.error('数据迁移失败:', migrationError);
+          return {
+            success: false,
+            error: `数据迁移失败: ${migrationError.message}`
+          };
+        }
+      } else {
+        console.log('原标签文件不存在，跳过数据迁移');
+      }
+    }
+    
+    // 缓存目录迁移逻辑
+    if (newSettings.cachePath) {
+      const currentCachePath = getActualCachePath();
+      if (newSettings.cachePath !== currentCachePath) {
+        console.log('检测到缓存路径更改，开始缓存迁移...');
+        
+        // 检查原缓存目录是否存在
+        if (await fs.pathExists(currentCachePath)) {
+          try {
+            // 确保新缓存目录存在
+            await fs.ensureDir(newSettings.cachePath);
+            
+            // 复制所有缓存文件
+            const files = await fs.readdir(currentCachePath);
+            for (const file of files) {
+              const srcFile = path.join(currentCachePath, file);
+              const destFile = path.join(newSettings.cachePath, file);
+              
+              if ((await fs.stat(srcFile)).isFile()) {
+                await fs.copy(srcFile, destFile);
+              }
+            }
+            
+            console.log('缓存文件迁移成功:', currentCachePath, '->', newSettings.cachePath);
+          } catch (migrationError) {
+            console.warn('缓存迁移失败，但不影响功能:', migrationError.message);
+          }
+        } else {
+          console.log('原缓存目录不存在，跳过缓存迁移');
+        }
+      }
+    }
+    
+    // 更新设置
+    if (newSettings.cachePath) {
+      settings.customCachePath = newSettings.cachePath;
+    }
+    if (newSettings.tagsPath) {
+      settings.customTagsPath = newSettings.tagsPath;
+    }
+    
+    // 保存设置文件
+    await fs.writeJson(SETTINGS_FILE, settings, { spaces: 2 });
+    
+    return {
+      success: true,
+      migrated: true
+    };
+  } catch (error) {
+    console.error('保存设置失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 获取实际使用的缓存路径（用于内部使用）
+function getActualCachePath() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const settings = fs.readJsonSync(SETTINGS_FILE);
+      return settings.customCachePath || path.join(os.tmpdir(), 'ppt-previews');
+    }
+  } catch (error) {
+    console.log('读取缓存路径设置失败，使用默认路径');
+  }
+  return path.join(os.tmpdir(), 'ppt-previews');
+}
+
+// 获取实际使用的标签文件路径（用于内部使用）
+function getActualTagsPath() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const settings = fs.readJsonSync(SETTINGS_FILE);
+      return settings.customTagsPath || DATA_FILE;
+    }
+  } catch (error) {
+    console.log('读取标签路径设置失败，使用默认路径');
+  }
+  return DATA_FILE;
 }
 
 // 生成错误提示SVG

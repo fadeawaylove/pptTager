@@ -301,6 +301,11 @@ body {
     z-index: 1000;
 }
 
+/* 标签编辑模态框需要更高的z-index */
+#tagModal {
+    z-index: 2000;
+}
+
 .modal-content {
     background: white;
     border-radius: 10px;
@@ -456,6 +461,48 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.preview-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.preview-tags {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: #2a2a2a;
+    border-bottom: 1px solid #333;
+    min-height: 40px;
+}
+
+.preview-tags-label {
+    font-weight: 500;
+    color: #ccc;
+    font-size: 14px;
+}
+
+.preview-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.preview-tags-list .tag {
+    background: #667eea;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .preview-info h3 {
@@ -744,6 +791,201 @@ body {
     }
     
     .dependency-info {
+        padding: 15px;
+    }
+}
+
+/* 设置模态框样式 */
+.settings-modal {
+    z-index: 1002;
+}
+
+.settings-content {
+    background: white;
+    border-radius: 15px;
+    width: 90vw;
+    max-width: 700px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.settings-header {
+    padding: 25px 30px;
+    border-bottom: 2px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    border-radius: 15px 15px 0 0;
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 300;
+}
+
+.settings-header .close-btn {
+    color: white;
+    font-size: 28px;
+    width: 35px;
+    height: 35px;
+}
+
+.settings-header .close-btn:hover {
+    color: #f0f0f0;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 50%;
+}
+
+.settings-body {
+    padding: 30px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.settings-section {
+    margin-bottom: 30px;
+}
+
+.settings-section h3 {
+    color: #333;
+    font-size: 18px;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #28a745;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.setting-item {
+    margin-bottom: 25px;
+}
+
+.setting-item label {
+    display: block;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.path-input-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.path-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    background-color: #f8f9fa;
+    color: #666;
+}
+
+.path-input:focus {
+    outline: none;
+    border-color: #28a745;
+    background-color: white;
+}
+
+.setting-description {
+    font-size: 12px;
+    color: #666;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.current-paths {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border-left: 4px solid #28a745;
+}
+
+.path-info {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.path-info:last-child {
+    margin-bottom: 0;
+}
+
+.path-info strong {
+    color: #333;
+    font-size: 14px;
+}
+
+.path-display {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #666;
+    background-color: white;
+    padding: 8px 10px;
+    border-radius: 5px;
+    border: 1px solid #e0e0e0;
+    word-break: break-all;
+}
+
+.settings-footer {
+    padding: 20px 30px;
+    border-top: 2px solid #e0e0e0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: #f8f9fa;
+    border-radius: 0 0 15px 15px;
+}
+
+/* 设置页面响应式设计 */
+@media (max-width: 768px) {
+    .settings-content {
+        width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .settings-header {
+        padding: 20px;
+    }
+    
+    .settings-header h2 {
+        font-size: 20px;
+    }
+    
+    .settings-body {
+        padding: 20px;
+    }
+    
+    .settings-section h3 {
+        font-size: 16px;
+    }
+    
+    .path-input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .path-input {
+        margin-bottom: 8px;
+    }
+    
+    .settings-footer {
+        padding: 15px 20px;
+        flex-direction: column;
+    }
+    
+    .current-paths {
         padding: 15px;
     }
 }

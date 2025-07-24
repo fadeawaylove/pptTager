@@ -15,6 +15,7 @@
                     <input type="text" id="searchInput" placeholder="搜索PPT文件或标签..." class="search-input">
                     <button id="clearSearch" class="btn btn-secondary">清除</button>
                 </div>
+                <button id="settingsBtn" class="btn btn-secondary">设置</button>
                 <button id="helpBtn" class="btn btn-help">帮助</button>
             </div>
         </header>
@@ -79,7 +80,15 @@
                     <h3 id="previewFileName">文件名</h3>
                     <span id="previewCounter" class="preview-counter">1 / 1</span>
                 </div>
-                <button id="closePreview" class="close-btn">&times;</button>
+                <div class="preview-actions">
+                    <button id="openPreviewFile" class="btn btn-secondary btn-small">打开文件</button>
+                    <button id="editPreviewTags" class="btn btn-primary btn-small">编辑标签</button>
+                    <button id="closePreview" class="close-btn">&times;</button>
+                </div>
+            </div>
+            <div class="preview-tags">
+                <div class="preview-tags-label">标签:</div>
+                <div id="previewTags" class="preview-tags-list"></div>
             </div>
             <div class="preview-body">
                 <div id="previewLoading" class="preview-loading hidden">
@@ -180,6 +189,59 @@
                         <li>如需LibreOffice预览，确保已正确安装LibreOffice</li>
                     </ul>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div id="settingsModal" class="modal settings-modal hidden">
+        <div class="settings-content">
+            <div class="settings-header">
+                <h2>应用设置</h2>
+                <button id="closeSettings" class="close-btn">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-section">
+                    <h3>📁 文件路径设置</h3>
+                    
+                    <div class="setting-item">
+                        <label for="cachePathInput">预览缓存路径:</label>
+                        <div class="path-input-group">
+                            <input type="text" id="cachePathInput" class="path-input" placeholder="选择预览缓存保存路径" readonly>
+                            <button id="selectCachePath" class="btn btn-secondary btn-small">浏览</button>
+                            <button id="resetCachePath" class="btn btn-secondary btn-small">重置</button>
+                        </div>
+                        <p class="setting-description">设置PPT预览图片的缓存保存位置，默认使用系统临时目录</p>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label for="tagsPathInput">标签文件路径:</label>
+                        <div class="path-input-group">
+                            <input type="text" id="tagsPathInput" class="path-input" placeholder="选择标签文件保存路径" readonly>
+                            <button id="selectTagsPath" class="btn btn-secondary btn-small">浏览</button>
+                            <button id="resetTagsPath" class="btn btn-secondary btn-small">重置</button>
+                        </div>
+                        <p class="setting-description">设置标签数据文件的保存位置，默认使用应用数据目录</p>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3>ℹ️ 当前路径信息</h3>
+                    <div class="current-paths">
+                        <div class="path-info">
+                            <strong>当前缓存路径:</strong>
+                            <span id="currentCachePath" class="path-display">加载中...</span>
+                        </div>
+                        <div class="path-info">
+                            <strong>当前标签文件:</strong>
+                            <span id="currentTagsPath" class="path-display">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <button id="saveSettings" class="btn btn-primary">保存设置</button>
+                <button id="cancelSettings" class="btn btn-secondary">取消</button>
             </div>
         </div>
     </div>

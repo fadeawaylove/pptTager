@@ -27,6 +27,21 @@ const helpBtn = document.getElementById('helpBtn');
 const helpModal = document.getElementById('helpModal');
 const closeHelpBtn = document.getElementById('closeHelp');
 
+// 设置相关元素
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+const closeSettingsBtn = document.getElementById('closeSettings');
+const cachePathInput = document.getElementById('cachePathInput');
+const tagsPathInput = document.getElementById('tagsPathInput');
+const selectCachePathBtn = document.getElementById('selectCachePath');
+const selectTagsPathBtn = document.getElementById('selectTagsPath');
+const resetCachePathBtn = document.getElementById('resetCachePath');
+const resetTagsPathBtn = document.getElementById('resetTagsPath');
+const currentCachePathEl = document.getElementById('currentCachePath');
+const currentTagsPathEl = document.getElementById('currentTagsPath');
+const saveSettingsBtn = document.getElementById('saveSettings');
+const cancelSettingsBtn = document.getElementById('cancelSettings');
+
 // 模态框元素
 const tagModal = document.getElementById('tagModal');
 const closeModalBtn = document.getElementById('closeModal');
@@ -46,6 +61,9 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const previewCounter = document.getElementById('previewCounter');
 const previewLoading = document.getElementById('previewLoading');
+const editPreviewTagsBtn = document.getElementById('editPreviewTags');
+const openPreviewFileBtn = document.getElementById('openPreviewFile');
+const previewTagsEl = document.getElementById('previewTags');
 
 // 初始化
 init();
@@ -105,6 +123,8 @@ function bindEvents() {
     closePreviewBtn.addEventListener('click', closePreviewModal);
     prevBtn.addEventListener('click', showPrevPreview);
     nextBtn.addEventListener('click', showNextPreview);
+    editPreviewTagsBtn.addEventListener('click', editPreviewTags);
+    openPreviewFileBtn.addEventListener('click', openPreviewFile);
     
     // 点击预览模态框外部关闭
     previewModal.addEventListener('click', (e) => {
@@ -124,6 +144,23 @@ function bindEvents() {
         }
     });
     
+    // 设置按钮事件
+    settingsBtn.addEventListener('click', showSettingsModal);
+    closeSettingsBtn.addEventListener('click', closeSettingsModal);
+    selectCachePathBtn.addEventListener('click', selectCachePath);
+    selectTagsPathBtn.addEventListener('click', selectTagsPath);
+    resetCachePathBtn.addEventListener('click', resetCachePath);
+    resetTagsPathBtn.addEventListener('click', resetTagsPath);
+    saveSettingsBtn.addEventListener('click', saveSettings);
+    cancelSettingsBtn.addEventListener('click', closeSettingsModal);
+    
+    // 点击设置模态框外部关闭
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            closeSettingsModal();
+        }
+    });
+    
     // 键盘导航
     document.addEventListener('keydown', (e) => {
         if (previewModal && !previewModal.classList.contains('hidden')) {
@@ -137,6 +174,10 @@ function bindEvents() {
         } else if (helpModal && !helpModal.classList.contains('hidden')) {
             if (e.key === 'Escape') {
                 closeHelpModal();
+            }
+        } else if (settingsModal && !settingsModal.classList.contains('hidden')) {
+            if (e.key === 'Escape') {
+                closeSettingsModal();
             }
         } else if (tagModal && !tagModal.classList.contains('hidden')) {
             if (e.key === 'Escape') {
@@ -288,6 +329,12 @@ async function saveTags() {
         renderFiles();
         updateStats();
         updateTagsPanel();
+        
+        // 如果预览模态框是打开的，更新预览页面的标签显示
+        if (!previewModal.classList.contains('hidden') && previewFiles.length > 0) {
+            const currentFile = previewFiles[currentPreviewIndex];
+            updatePreviewTags(currentFile);
+        }
     } else {
         alert('保存标签失败');
     }
@@ -427,6 +474,9 @@ async function showPreview() {
     previewFileName.textContent = file.name;
     previewCounter.textContent = `${currentPreviewIndex + 1} / ${previewFiles.length}`;
     
+    // 显示当前文件的标签
+    updatePreviewTags(file);
+    
     // 显示加载状态
     previewLoading.classList.remove('hidden');
     previewImage.classList.add('hidden');
@@ -495,6 +545,161 @@ function showHelpModal() {
 
 function closeHelpModal() {
     helpModal.classList.add('hidden');
+}
+
+// 预览页面标签相关函数
+function updatePreviewTags(file) {
+    const fileTags = tagsData[file.path] || [];
+    previewTagsEl.innerHTML = '';
+    
+    if (fileTags.length === 0) {
+        previewTagsEl.innerHTML = '<span style="color: #999; font-style: italic;">暂无标签</span>';
+    } else {
+        fileTags.forEach(tag => {
+            const tagEl = document.createElement('span');
+            tagEl.className = 'tag';
+            tagEl.textContent = tag;
+            previewTagsEl.appendChild(tagEl);
+        });
+    }
+}
+
+function editPreviewTags() {
+    if (previewFiles.length === 0) return;
+    
+    const currentFile = previewFiles[currentPreviewIndex];
+    currentEditingFile = currentFile.path;
+    
+    // 设置模态框内容
+    modalFileName.textContent = currentFile.name;
+    
+    // 显示当前标签
+    const fileTags = tagsData[currentFile.path] || [];
+    renderCurrentTags(fileTags);
+    
+    // 清空输入框
+    tagInput.value = '';
+    
+    // 显示标签编辑模态框
+    showModal();
+}
+
+function openPreviewFile() {
+    if (previewFiles.length === 0) return;
+    
+    const currentFile = previewFiles[currentPreviewIndex];
+    openFile(currentFile.path);
+}
+
+// 设置模态框函数
+function showSettingsModal() {
+    loadCurrentSettings();
+    settingsModal.classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+    settingsModal.classList.add('hidden');
+    // 重置输入框
+    cachePathInput.value = '';
+    tagsPathInput.value = '';
+}
+
+async function loadCurrentSettings() {
+    try {
+        const settings = await ipcRenderer.invoke('get-current-settings');
+        currentCachePathEl.textContent = settings.cachePath || '加载失败';
+        currentTagsPathEl.textContent = settings.tagsPath || '加载失败';
+    } catch (error) {
+        console.error('加载当前设置失败:', error);
+        currentCachePathEl.textContent = '加载失败';
+        currentTagsPathEl.textContent = '加载失败';
+    }
+}
+
+async function selectCachePath() {
+    try {
+        const path = await ipcRenderer.invoke('select-cache-path');
+        if (path) {
+            cachePathInput.value = path;
+        }
+    } catch (error) {
+        console.error('选择缓存路径失败:', error);
+        alert('选择缓存路径失败');
+    }
+}
+
+async function selectTagsPath() {
+    try {
+        const path = await ipcRenderer.invoke('select-tags-path');
+        if (path) {
+            tagsPathInput.value = path;
+        }
+    } catch (error) {
+        console.error('选择标签路径失败:', error);
+        alert('选择标签路径失败');
+    }
+}
+
+async function resetCachePath() {
+    try {
+        const result = await ipcRenderer.invoke('reset-cache-path');
+        if (result.success) {
+            cachePathInput.value = '';
+            currentCachePathEl.textContent = result.path;
+            alert('缓存路径已重置为默认值');
+        } else {
+            alert('重置缓存路径失败');
+        }
+    } catch (error) {
+        console.error('重置缓存路径失败:', error);
+        alert('重置缓存路径失败');
+    }
+}
+
+async function resetTagsPath() {
+    try {
+        const result = await ipcRenderer.invoke('reset-tags-path');
+        if (result.success) {
+            tagsPathInput.value = '';
+            currentTagsPathEl.textContent = result.path;
+            alert('标签文件路径已重置为默认值');
+        } else {
+            alert('重置标签文件路径失败');
+        }
+    } catch (error) {
+        console.error('重置标签文件路径失败:', error);
+        alert('重置标签文件路径失败');
+    }
+}
+
+async function saveSettings() {
+    try {
+        const settings = {
+            cachePath: cachePathInput.value.trim() || null,
+            tagsPath: tagsPathInput.value.trim() || null
+        };
+        
+        const result = await ipcRenderer.invoke('save-settings', settings);
+        if (result.success) {
+            let message = '设置保存成功！';
+            
+            if (result.migrated) {
+                message += '\n\n✅ 已自动迁移您的原有数据到新位置';
+            }
+            
+            message += '\n\n注意：路径更改将在下次启动应用时生效。';
+            
+            alert(message);
+            closeSettingsModal();
+            // 重新加载当前设置显示
+            loadCurrentSettings();
+        } else {
+            alert('保存设置失败: ' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        console.error('保存设置失败:', error);
+        alert('保存设置失败');
+    }
 }
 
 // 全局函数，供HTML调用
