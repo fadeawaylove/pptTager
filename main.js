@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const { exec, spawn } = require('child_process');
@@ -177,15 +177,35 @@ ipcMain.handle('get-ppt-preview', async (event, filePath) => {
     const cacheDir = path.join(os.tmpdir(), 'ppt-previews');
     const outputPath = path.join(cacheDir, `${fileName}.png`);
     
-    // 检查缓存是否存在
+    // 检查缓存是否存在且是最新的
     if (fs.existsSync(outputPath)) {
-      console.log('使用缓存的预览图片:', outputPath);
-      const imageData = fs.readFileSync(outputPath);
-      return {
-        success: true,
-        data: `data:image/png;base64,${imageData.toString('base64')}`,
-        cached: true
-      };
+      try {
+        const pptStat = fs.statSync(filePath);
+        const cacheStat = fs.statSync(outputPath);
+        
+        // 如果缓存文件比PPT文件新，则使用缓存
+        if (cacheStat.mtime > pptStat.mtime) {
+          console.log('使用缓存的预览图片:', outputPath);
+          const imageData = fs.readFileSync(outputPath);
+          return {
+            success: true,
+            data: `data:image/png;base64,${imageData.toString('base64')}`,
+            cached: true
+          };
+        } else {
+          console.log('PPT文件已更新，需要重新生成预览');
+          // 删除过期的缓存文件
+          fs.unlinkSync(outputPath);
+        }
+      } catch (error) {
+        console.log('检查缓存文件时出错:', error);
+        // 如果检查失败，删除可能损坏的缓存文件
+        try {
+          fs.unlinkSync(outputPath);
+        } catch (unlinkError) {
+          // 忽略删除错误
+        }
+      }
     }
     
     // 使用LibreOffice转换
