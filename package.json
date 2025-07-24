@@ -1,6 +1,6 @@
 {
   "name": "ppt-tagger",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "A desktop application for managing and tagging PowerPoint files",
   "main": "main.js",
   "scripts": {
@@ -34,6 +34,7 @@
   "build": {
     "appId": "com.example.ppt-tagger",
     "productName": "PPT Tagger",
+    "icon": "assets/icon",
     "directories": {
       "output": "dist"
     },
@@ -51,7 +52,8 @@
           "target": "nsis",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "icon": "assets/icon.ico"
     },
     "mac": {
       "target": [
@@ -60,7 +62,7 @@
           "arch": ["x64", "arm64"]
         }
       ],
-
+      "icon": "assets/icon.icns",
       "category": "public.app-category.productivity"
     },
     "linux": {
@@ -70,7 +72,7 @@
           "arch": ["x64"]
         }
       ],
-      
+      "icon": "assets/icon.png",
       "category": "Office"
     },
     "nsis": {
