@@ -40,7 +40,10 @@
     "files": [
       "**/*",
       "!node_modules/**/*",
-      "node_modules/fs-extra/**/*"
+      "node_modules/fs-extra/**/*",
+      "node_modules/universalify/**/*",
+      "node_modules/graceful-fs/**/*",
+      "node_modules/jsonfile/**/*"
     ],
     "win": {
       "target": [
