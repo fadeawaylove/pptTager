@@ -9,6 +9,7 @@ let currentEditingFile = null;
 let selectedTags = new Set();
 let currentPreviewIndex = 0;
 let previewFiles = [];
+let currentViewMode = localStorage.getItem('viewMode') || 'grid'; // 'grid' 或 'list'
 
 // DOM元素
 const selectFolderBtn = document.getElementById('selectFolder');
@@ -21,6 +22,8 @@ const clearSearchBtn = document.getElementById('clearSearch');
 const totalFilesEl = document.getElementById('totalFiles');
 const taggedFilesEl = document.getElementById('taggedFiles');
 const allTagsEl = document.getElementById('allTags');
+const gridViewBtn = document.getElementById('gridViewBtn');
+const listViewBtn = document.getElementById('listViewBtn');
 
 // 帮助相关元素
 const helpBtn = document.getElementById('helpBtn');
@@ -69,28 +72,106 @@ const previewTagsEl = document.getElementById('previewTags');
 init();
 
 async function init() {
-    // 加载已保存的标签数据
-    tagsData = await ipcRenderer.invoke('load-tags');
+    console.log('🚀 [INIT] 开始初始化');
     
-    // 绑定事件
-    bindEvents();
+    // 显示启动画面，隐藏主界面
+    const splashScreen = document.getElementById('splashScreen');
+    const container = document.querySelector('.container');
     
-    // 尝试加载上次选择的文件夹
-    const lastFolder = await ipcRenderer.invoke('get-last-folder');
-    if (lastFolder) {
-        currentFolder = lastFolder;
-        currentFolderEl.textContent = lastFolder;
-        await scanFiles();
-    } else {
-        // 显示空状态
-        showEmptyState();
+    console.log('🎬 [INIT] 启动画面状态:', splashScreen ? '已找到' : '未找到');
+    console.log('📦 [INIT] 主容器状态:', container ? '已找到' : '未找到');
+    
+    // 记录启动时间
+    const startTime = Date.now();
+    
+    console.log('⏰ [INIT] 启动时间:', new Date(startTime).toLocaleTimeString());
+    
+    try {
+        console.log('📋 [INIT] 开始执行所有初始化任务');
+        
+        // 1. 加载已保存的标签数据
+        console.log('🏷️ [INIT] 正在加载标签数据...');
+        tagsData = await ipcRenderer.invoke('load-tags');
+        console.log('✅ [INIT] 标签数据加载完成 - 数量:', Object.keys(tagsData || {}).length);
+        
+        // 2. 绑定事件
+        console.log('🔗 [INIT] 正在绑定事件...');
+        bindEvents();
+        console.log('✅ [INIT] 事件绑定完成');
+        
+        // 3. 获取上次选择的文件夹
+        console.log('📁 [INIT] 正在获取上次选择的文件夹...');
+        const lastFolder = await ipcRenderer.invoke('get-last-folder');
+        console.log('✅ [INIT] 文件夹信息获取完成:', lastFolder || '无');
+        
+        // 4. 如果有上次选择的文件夹，扫描文件
+        if (lastFolder) {
+            console.log('📂 [INIT] 正在扫描文件夹:', lastFolder);
+            currentFolder = lastFolder;
+            currentFolderEl.textContent = lastFolder;
+            await scanFilesQuietly();
+            console.log('✅ [INIT] 文件扫描完成，找到文件数:', allFiles.length);
+        } else {
+            console.log('ℹ️ [INIT] 没有上次选择的文件夹，跳过文件扫描');
+        }
+        
+        // 5. 更新统计信息和标签面板
+        console.log('📊 [INIT] 正在更新统计信息和标签面板...');
+        updateStats();
+        updateTagsPanel();
+        console.log('✅ [INIT] 统计信息和标签面板更新完成');
+        
+        // 计算总耗时
+        const totalTime = Date.now() - startTime;
+        console.log('⏱️ [INIT] 所有任务完成，总耗时:', totalTime + 'ms');
+        
+        // 如果任务完成太快，稍微延迟以确保用户看到启动画面
+        const minDisplayTime = 300;
+        if (totalTime < minDisplayTime) {
+            const waitTime = minDisplayTime - totalTime;
+            console.log('⏳ [INIT] 任务完成太快，等待', waitTime + 'ms', '以确保启动画面可见');
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        console.log('✨ [INIT] 所有初始化任务完成，准备切换界面');
+        
+    } catch (error) {
+        console.error('❌ [INIT] 初始化过程中出错:', error);
+        // 即使出错也要确保最小显示时间
+        const elapsedTime = Date.now() - startTime;
+        if (elapsedTime < 800) {
+            await new Promise(resolve => setTimeout(resolve, 800 - elapsedTime));
+        }
+    } finally {
+        console.log('🎭 [INIT] 开始界面切换');
+        
+        // 同时切换：隐藏启动画面，显示主界面
+        splashScreen.classList.add('fade-out');
+        container.classList.add('show');
+        
+        console.log('🎨 [INIT] CSS类已添加 - fade-out:', splashScreen.classList.contains('fade-out'), 'show:', container.classList.contains('show'));
+        
+        // 等待过渡动画完成后检查空状态和清理
+        setTimeout(() => {
+            // 检查是否需要显示空状态
+            if (!currentFolder || allFiles.length === 0) {
+                if (!currentFolder) {
+                    console.log('📭 [INIT] 显示空状态 - 无文件夹');
+                    showEmptyState('请选择一个包含PPT文件的文件夹');
+                } else {
+                    console.log('📭 [INIT] 显示空状态 - 无文件');
+                    showEmptyState('该文件夹中没有找到PPT文件');
+                }
+            } else {
+                console.log('✅ [INIT] 有文件，不显示空状态');
+            }
+            
+            // 完全隐藏启动画面
+            console.log('🚪 [INIT] 启动画面完全隐藏');
+            splashScreen.style.display = 'none';
+            console.log('🏁 [INIT] 初始化完全结束');
+        }, 300);
     }
-    
-    // 更新统计信息
-    updateStats();
-    
-    // 更新标签面板
-    updateTagsPanel();
 }
 
 function bindEvents() {
@@ -161,6 +242,14 @@ function bindEvents() {
         }
     });
     
+    // 视图切换按钮事件
+    gridViewBtn.addEventListener('click', () => switchView('grid'));
+    listViewBtn.addEventListener('click', () => switchView('list'));
+    
+    // 初始化视图状态
+    gridViewBtn.classList.toggle('active', currentViewMode === 'grid');
+    listViewBtn.classList.toggle('active', currentViewMode === 'list');
+    
     // 键盘导航
     document.addEventListener('keydown', (e) => {
         if (previewModal && !previewModal.classList.contains('hidden')) {
@@ -200,7 +289,8 @@ async function scanFiles() {
     showLoading();
     
     try {
-        allFiles = await ipcRenderer.invoke('scan-ppt-files', currentFolder);
+        const files = await ipcRenderer.invoke('scan-files', currentFolder);
+        allFiles = files;
         filteredFiles = [...allFiles];
         
         if (allFiles.length === 0) {
@@ -217,16 +307,79 @@ async function scanFiles() {
     }
 }
 
+// 静默扫描文件，不显示加载状态（用于初始化）
+async function scanFilesQuietly() {
+    console.log('🔍 [SCAN] 开始静默扫描文件');
+    
+    if (!currentFolder) {
+        console.log('❌ [SCAN] 没有当前文件夹，跳过扫描');
+        return;
+    }
+    
+    console.log('📂 [SCAN] 扫描文件夹:', currentFolder);
+    
+    try {
+        allFiles = await ipcRenderer.invoke('scan-ppt-files', currentFolder);
+        filteredFiles = [...allFiles];
+        
+        console.log('📋 [SCAN] 扫描结果 - 文件数量:', allFiles.length);
+        
+        if (allFiles.length === 0) {
+            console.log('📭 [SCAN] 没有找到PPT文件');
+            // 不显示空状态，等启动画面结束后再显示
+        } else {
+            console.log('🎨 [SCAN] 开始静默渲染文件列表');
+            // 静默渲染文件列表
+            renderFilesQuietly();
+        }
+        
+        updateStats();
+        updateTagsPanel();
+        
+        console.log('✅ [SCAN] 静默扫描和渲染完成');
+        
+    } catch (error) {
+        console.error('❌ [SCAN] 扫描文件时出错:', error);
+        // 不显示错误状态，等启动画面结束后再处理
+    }
+}
+
 function renderFiles() {
     hideLoading();
     hideEmptyState();
     
+    // 设置容器类名
+    filesListEl.className = currentViewMode === 'grid' ? 'files-grid' : 'files-list';
     filesListEl.innerHTML = '';
     
     filteredFiles.forEach(file => {
-        const fileCard = createFileCard(file);
+        const fileCard = currentViewMode === 'grid' ? createFileCard(file) : createListFileCard(file);
         filesListEl.appendChild(fileCard);
     });
+}
+
+// 静默渲染文件列表，不改变加载状态（用于初始化）
+function renderFilesQuietly() {
+    console.log('🎨 [RENDER] 开始静默渲染文件列表');
+    
+    if (filteredFiles.length === 0) {
+        console.log('📭 [RENDER] 没有文件需要渲染');
+        filesListEl.innerHTML = '';
+        return;
+    }
+    
+    console.log('📄 [RENDER] 渲染文件数量:', filteredFiles.length);
+    
+    // 设置容器类名
+    filesListEl.className = currentViewMode === 'grid' ? 'files-grid' : 'files-list';
+    filesListEl.innerHTML = '';
+    
+    filteredFiles.forEach(file => {
+        const fileCard = currentViewMode === 'grid' ? createFileCard(file) : createListFileCard(file);
+        filesListEl.appendChild(fileCard);
+    });
+    
+    console.log('✅ [RENDER] 静默渲染完成');
 }
 
 function createFileCard(file) {
@@ -447,14 +600,22 @@ function hideLoading() {
 }
 
 function showEmptyState(message = '请选择一个包含PPT文件的文件夹') {
+    console.log('📭 [STATE] 显示空状态:', message);
+    
     emptyEl.querySelector('p').textContent = message;
     emptyEl.classList.remove('hidden');
     filesListEl.classList.add('hidden');
     loadingEl.classList.add('hidden');
+    
+    console.log('✅ [STATE] 空状态已显示');
 }
 
 function hideEmptyState() {
+    console.log('🚫 [STATE] 隐藏空状态');
+    
     emptyEl.classList.add('hidden');
+    
+    console.log('✅ [STATE] 空状态已隐藏');
 }
 
 // 预览相关函数
@@ -700,6 +861,58 @@ async function saveSettings() {
         console.error('保存设置失败:', error);
         alert('保存设置失败');
     }
+}
+
+// 视图切换函数
+function switchView(viewMode) {
+    currentViewMode = viewMode;
+    
+    // 保存到本地存储
+    localStorage.setItem('viewMode', viewMode);
+    
+    // 更新按钮状态
+    gridViewBtn.classList.toggle('active', viewMode === 'grid');
+    listViewBtn.classList.toggle('active', viewMode === 'list');
+    
+    // 重新渲染文件列表
+    renderFiles();
+}
+
+// 创建列表视图文件卡片
+function createListFileCard(file) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    
+    const fileTags = tagsData[file.path] || [];
+    const fileSize = formatFileSize(file.size);
+    const modifiedDate = new Date(file.modified).toLocaleDateString('zh-CN');
+    
+    card.innerHTML = `
+        <div class="file-info-section">
+            <div class="file-name" title="${file.name}">${file.name}</div>
+            <div class="file-info">
+                大小: ${fileSize} | 修改时间: ${modifiedDate}
+            </div>
+            <div class="file-tags">
+                ${fileTags.map(tag => `<span class="file-tag">${tag}</span>`).join('')}
+            </div>
+        </div>
+        <div class="file-actions">
+            <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\\/g, '\\\\')}')">预览</button>
+            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\\/g, '\\\\')}')">编辑标签</button>
+            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\\/g, '\\\\')}')">打开文件</button>
+        </div>
+    `;
+    
+    // 添加卡片点击事件预览
+    card.addEventListener('click', (e) => {
+        // 如果点击的是按钮，不触发预览
+        if (!e.target.closest('.file-actions')) {
+            previewFile(file.path);
+        }
+    });
+    
+    return card;
 }
 
 // 全局函数，供HTML调用

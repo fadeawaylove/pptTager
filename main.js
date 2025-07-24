@@ -11,14 +11,20 @@ const SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json');
 // 创建主窗口
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1400,
+    height: 1200,
     icon: path.join(__dirname, 'assets/icon.png'),
+    show: false, // 防止闪动，等内容加载完成后再显示
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     },
     autoHideMenuBar: true
+  });
+
+  // 等待页面准备就绪后再显示窗口，防止闪动
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
   });
 
   mainWindow.loadFile('index.html');
