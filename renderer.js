@@ -10,6 +10,8 @@ let selectedTags = new Set();
 let currentPreviewIndex = 0;
 let previewFiles = [];
 let currentViewMode = localStorage.getItem('viewMode') || 'grid'; // 'grid' 或 'list'
+let currentSuggestionIndex = -1;
+let availableTags = [];
 
 // DOM元素
 const selectFolderBtn = document.getElementById('selectFolder');
@@ -54,6 +56,7 @@ const addTagBtn = document.getElementById('addTag');
 const currentTagsEl = document.getElementById('currentTags');
 const saveTagsBtn = document.getElementById('saveTagsBtn');
 const cancelBtn = document.getElementById('cancelBtn');
+const tagSuggestions = document.getElementById('tagSuggestions');
 
 // 预览模态框元素
 const previewModal = document.getElementById('previewModal');
@@ -189,8 +192,36 @@ function bindEvents() {
     addTagBtn.addEventListener('click', addTag);
     tagInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-            addTag();
+            e.preventDefault();
+            if (currentSuggestionIndex >= 0) {
+                selectSuggestion(currentSuggestionIndex);
+            } else {
+                addTag();
+            }
         }
+    });
+    
+    tagInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            navigateSuggestions(1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateSuggestions(-1);
+        } else if (e.key === 'Escape') {
+            hideSuggestions();
+        }
+    });
+    
+    tagInput.addEventListener('input', handleTagInput);
+    tagInput.addEventListener('focus', handleTagInput);
+    tagInput.addEventListener('blur', (e) => {
+        // 延迟隐藏建议，以便点击建议项时能正常工作
+        setTimeout(() => {
+            if (!tagSuggestions.contains(document.activeElement)) {
+                hideSuggestions();
+            }
+        }, 150);
     });
     
     // 点击模态框外部关闭
@@ -475,6 +506,94 @@ function removeTag(tag) {
     }
 }
 
+// 自动完成功能
+function updateAvailableTags() {
+    const allTagsSet = new Set();
+    Object.values(tagsData).forEach(tags => {
+        tags.forEach(tag => allTagsSet.add(tag));
+    });
+    availableTags = Array.from(allTagsSet).sort();
+}
+
+function handleTagInput() {
+    const inputValue = tagInput.value.trim();
+    if (!inputValue) {
+        hideSuggestions();
+        return;
+    }
+    
+    updateAvailableTags();
+    
+    // 过滤出匹配的标签（排除当前文件已有的标签）
+    const currentFileTags = tagsData[currentEditingFile] || [];
+    const suggestions = availableTags.filter(tag => 
+        tag.toLowerCase().includes(inputValue.toLowerCase()) &&
+        !currentFileTags.includes(tag) &&
+        tag !== inputValue
+    );
+    
+    if (suggestions.length > 0) {
+        showSuggestions(suggestions);
+    } else {
+        hideSuggestions();
+    }
+}
+
+function showSuggestions(suggestions) {
+    tagSuggestions.innerHTML = '';
+    currentSuggestionIndex = -1;
+    
+    suggestions.forEach((tag, index) => {
+        const item = document.createElement('div');
+        item.className = 'tag-suggestion-item';
+        item.textContent = tag;
+        item.addEventListener('click', () => selectSuggestion(index));
+        tagSuggestions.appendChild(item);
+    });
+    
+    tagSuggestions.classList.remove('hidden');
+}
+
+function hideSuggestions() {
+    tagSuggestions.classList.add('hidden');
+    currentSuggestionIndex = -1;
+}
+
+function navigateSuggestions(direction) {
+    const items = tagSuggestions.querySelectorAll('.tag-suggestion-item');
+    if (items.length === 0) return;
+    
+    // 清除之前的高亮
+    items.forEach(item => item.classList.remove('highlighted'));
+    
+    // 计算新的索引
+    currentSuggestionIndex += direction;
+    if (currentSuggestionIndex < 0) {
+        currentSuggestionIndex = items.length - 1;
+    } else if (currentSuggestionIndex >= items.length) {
+        currentSuggestionIndex = 0;
+    }
+    
+    // 高亮当前项
+    items[currentSuggestionIndex].classList.add('highlighted');
+    
+    // 滚动到可见区域
+    items[currentSuggestionIndex].scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth'
+    });
+}
+
+function selectSuggestion(index) {
+    const items = tagSuggestions.querySelectorAll('.tag-suggestion-item');
+    if (index >= 0 && index < items.length) {
+        const selectedTag = items[index].textContent;
+        tagInput.value = selectedTag;
+        addTag();
+        hideSuggestions();
+    }
+}
+
 async function saveTags() {
     const success = await ipcRenderer.invoke('save-tags', tagsData);
     if (success) {
@@ -586,6 +705,7 @@ function showModal() {
 function closeModal() {
     tagModal.classList.add('hidden');
     currentEditingFile = null;
+    hideSuggestions();
 }
 
 function showLoading() {

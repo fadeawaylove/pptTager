@@ -104,7 +104,10 @@
             <div class="modal-body">
                 <p><strong>文件:</strong> <span id="modalFileName"></span></p>
                 <div class="tag-input-container">
-                    <input type="text" id="tagInput" placeholder="输入标签，按回车添加" class="tag-input">
+                    <div class="tag-input-wrapper">
+                        <input type="text" id="tagInput" placeholder="输入标签，按回车添加" class="tag-input" autocomplete="off">
+                        <div id="tagSuggestions" class="tag-suggestions hidden"></div>
+                    </div>
                     <button id="addTag" class="btn btn-primary">添加标签</button>
                 </div>
                 <div id="currentTags" class="current-tags"></div>
