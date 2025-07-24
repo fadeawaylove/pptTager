@@ -1,0 +1,720 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+    overflow-x: hidden;
+}
+
+.container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.header h1 {
+    margin-bottom: 15px;
+    font-size: 24px;
+    font-weight: 300;
+}
+
+.controls {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.search-input {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 20px;
+    width: 300px;
+    font-size: 14px;
+    outline: none;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn-primary {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #45a049;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.sidebar {
+    width: 300px;
+    background-color: white;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.sidebar h3 {
+    margin-bottom: 15px;
+    color: #555;
+    font-size: 16px;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 5px;
+}
+
+.folder-info, .tags-panel, .stats {
+    margin-bottom: 30px;
+}
+
+.folder-info p {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.tag-item {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tag-item:hover {
+    background-color: #bbdefb;
+    transform: scale(1.05);
+}
+
+.tag-item.active {
+    background-color: #1976d2;
+    color: white;
+}
+
+.content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.loading, .empty-state {
+    text-align: center;
+    padding: 50px;
+    color: #666;
+    font-size: 18px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.file-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.file-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+}
+
+.file-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    margin-bottom: 15px;
+}
+
+.file-name {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #333;
+    word-break: break-word;
+}
+
+.file-info {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 15px;
+}
+
+.file-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 15px;
+    min-height: 20px;
+}
+
+.file-tag {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 11px;
+}
+
+.file-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-small {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 15px;
+}
+
+.btn-edit {
+    background-color: #2196F3;
+    color: white;
+}
+
+.btn-edit:hover {
+    background-color: #1976D2;
+}
+
+.btn-open {
+    background-color: #FF9800;
+    color: white;
+}
+
+.btn-open:hover {
+    background-color: #F57C00;
+}
+
+.btn-preview {
+    background-color: #9C27B0;
+    color: white;
+}
+
+.btn-preview:hover {
+    background-color: #7B1FA2;
+}
+
+/* 模态框样式 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 10px;
+    width: 500px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #333;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.tag-input-container {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.tag-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.current-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.current-tag {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.remove-tag {
+    background: none;
+    border: none;
+    color: #1976d2;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.remove-tag:hover {
+    background-color: #1976d2;
+    color: white;
+}
+
+.modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        max-height: 200px;
+    }
+    
+    .files-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-container {
+        justify-content: stretch;
+    }
+    
+    .search-input {
+        width: 100%;
+    }
+}
+
+/* 预览模态框样式 */
+.preview-modal {
+    background-color: rgba(0,0,0,0.9);
+}
+
+.preview-content {
+    background: #1a1a1a;
+    border-radius: 10px;
+    width: 90vw;
+    height: 90vh;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    color: white;
+}
+
+.preview-header {
+    padding: 20px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.preview-info h3 {
+    margin: 0;
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+.preview-counter {
+    font-size: 14px;
+    color: #ccc;
+}
+
+.preview-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.preview-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 5px;
+}
+
+.preview-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    color: #ccc;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #333;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.preview-navigation {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    border-top: 1px solid #333;
+}
+
+.nav-btn {
+    padding: 10px 20px;
+    background-color: #667eea;
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.nav-btn:hover:not(:disabled) {
+    background-color: #5a67d8;
+    transform: translateY(-2px);
+}
+
+.nav-btn:disabled {
+    background-color: #333;
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.close-btn {
+    color: #ccc;
+}
+
+.close-btn:hover {
+    color: white;
+}
+
+/* 文件卡片悬停效果增强 */
+.file-card {
+    cursor: pointer;
+}
+
+.file-card:hover .file-icon {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 帮助按钮样式 */
+.btn-help {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.btn-help:hover {
+    background-color: #138496;
+    transform: translateY(-1px);
+}
+
+/* 帮助模态框样式 */
+.help-modal {
+    z-index: 1001;
+}
+
+.help-content {
+    background: white;
+    border-radius: 15px;
+    width: 90vw;
+    max-width: 800px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.help-header {
+    padding: 25px 30px;
+    border-bottom: 2px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px 15px 0 0;
+}
+
+.help-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 300;
+}
+
+.help-header .close-btn {
+    color: white;
+    font-size: 28px;
+    width: 35px;
+    height: 35px;
+}
+
+.help-header .close-btn:hover {
+    color: #f0f0f0;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 50%;
+}
+
+.help-body {
+    padding: 30px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.help-section {
+    margin-bottom: 30px;
+}
+
+.help-section h3 {
+    color: #333;
+    font-size: 18px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.help-section h4 {
+    color: #555;
+    font-size: 16px;
+    margin: 15px 0 8px 0;
+}
+
+.help-section p {
+    line-height: 1.6;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.help-section ul, .help-section ol {
+    padding-left: 20px;
+    margin-bottom: 15px;
+}
+
+.help-section li {
+    line-height: 1.6;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.help-section li strong {
+    color: #333;
+}
+
+.dependency-info {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+}
+
+.note {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-size: 14px;
+}
+
+.faq h4 {
+    color: #667eea;
+    font-size: 15px;
+    margin-top: 20px;
+    margin-bottom: 8px;
+}
+
+.faq p {
+    margin-bottom: 15px;
+    padding-left: 15px;
+}
+
+.help-section a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.help-section a:hover {
+    color: #5a67d8;
+    text-decoration: underline;
+}
+
+/* 帮助页面响应式设计 */
+@media (max-width: 768px) {
+    .help-content {
+        width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .help-header {
+        padding: 20px;
+    }
+    
+    .help-header h2 {
+        font-size: 20px;
+    }
+    
+    .help-body {
+        padding: 20px;
+    }
+    
+    .help-section h3 {
+        font-size: 16px;
+    }
+    
+    .dependency-info {
+        padding: 15px;
+    }
+}

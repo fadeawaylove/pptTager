@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT标签管理器</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>PPT标签管理器</h1>
+            <div class="controls">
+                <button id="selectFolder" class="btn btn-primary">选择文件夹</button>
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="搜索PPT文件或标签..." class="search-input">
+                    <button id="clearSearch" class="btn btn-secondary">清除</button>
+                </div>
+                <button id="helpBtn" class="btn btn-help">帮助</button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="folder-info">
+                    <h3>当前文件夹</h3>
+                    <p id="currentFolder">未选择文件夹</p>
+                </div>
+                
+                <div class="tags-panel">
+                    <h3>所有标签</h3>
+                    <div id="allTags" class="tags-list"></div>
+                </div>
+                
+                <div class="stats">
+                    <h3>统计信息</h3>
+                    <p>总文件数: <span id="totalFiles">0</span></p>
+                    <p>已标记: <span id="taggedFiles">0</span></p>
+                </div>
+            </div>
+
+            <div class="content">
+                <div id="loadingMessage" class="loading hidden">正在扫描PPT文件...</div>
+                <div id="emptyMessage" class="empty-state hidden">
+                    <p>请选择一个包含PPT文件的文件夹</p>
+                </div>
+                
+                <div id="filesList" class="files-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 标签编辑模态框 -->
+    <div id="tagModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑标签</h3>
+                <button id="closeModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>文件:</strong> <span id="modalFileName"></span></p>
+                <div class="tag-input-container">
+                    <input type="text" id="tagInput" placeholder="输入标签，按回车添加" class="tag-input">
+                    <button id="addTag" class="btn btn-primary">添加标签</button>
+                </div>
+                <div id="currentTags" class="current-tags"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveTagsBtn" class="btn btn-primary">保存</button>
+                <button id="cancelBtn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PPT预览模态框 -->
+    <div id="previewModal" class="modal preview-modal hidden">
+        <div class="preview-content">
+            <div class="preview-header">
+                <div class="preview-info">
+                    <h3 id="previewFileName">文件名</h3>
+                    <span id="previewCounter" class="preview-counter">1 / 1</span>
+                </div>
+                <button id="closePreview" class="close-btn">&times;</button>
+            </div>
+            <div class="preview-body">
+                <div id="previewLoading" class="preview-loading hidden">
+                    <div class="loading-spinner"></div>
+                    <p>正在生成预览...</p>
+                </div>
+                <img id="previewImage" class="preview-image" alt="PPT预览" />
+            </div>
+            <div class="preview-navigation">
+                <button id="prevBtn" class="nav-btn prev-btn">‹ 上一个</button>
+                <button id="nextBtn" class="nav-btn next-btn">下一个 ›</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帮助页面模态框 -->
+    <div id="helpModal" class="modal help-modal hidden">
+        <div class="help-content">
+            <div class="help-header">
+                <h2>PPT标签管理器 - 帮助文档</h2>
+                <button id="closeHelp" class="close-btn">&times;</button>
+            </div>
+            <div class="help-body">
+                <div class="help-section">
+                    <h3>🚀 软件介绍</h3>
+                    <p>PPT标签管理器是一个强大的演示文稿管理工具，帮助您高效地组织和查找PPT文件。</p>
+                </div>
+                
+                <div class="help-section">
+                    <h3>📋 主要功能</h3>
+                    <ul>
+                        <li><strong>文件夹扫描</strong>：自动扫描指定文件夹中的PPT文件</li>
+                        <li><strong>标签管理</strong>：为PPT文件添加自定义标签，便于分类</li>
+                        <li><strong>实时预览</strong>：查看PPT文件的真实内容预览</li>
+                        <li><strong>智能搜索</strong>：根据文件名或标签快速查找文件</li>
+                        <li><strong>路径记忆</strong>：自动保存上次选择的文件夹路径</li>
+                    </ul>
+                </div>
+                
+                <div class="help-section">
+                    <h3>🔧 依赖软件安装</h3>
+                    <div class="dependency-info">
+                        <h4>LibreOffice（推荐）</h4>
+                        <p>为了获得最佳的PPT预览效果，建议安装LibreOffice：</p>
+                        <ol>
+                            <li>访问官方网站：<a href="https://zh-cn.libreoffice.org/download/download/" target="_blank">https://zh-cn.libreoffice.org/download/download/</a></li>
+                            <li>下载适合您操作系统的版本</li>
+                            <li>运行安装程序，按照提示完成安装</li>
+                            <li>重启PPT标签管理器以启用LibreOffice预览</li>
+                        </ol>
+                        <div class="note">
+                            <strong>注意：</strong>如果未安装LibreOffice，软件会自动使用备用的SVG预览方案，功能不受影响。
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="help-section">
+                    <h3>📖 使用指南</h3>
+                    <ol>
+                        <li><strong>选择文件夹</strong>：点击"选择文件夹"按钮，选择包含PPT文件的目录</li>
+                        <li><strong>浏览文件</strong>：在主界面查看扫描到的PPT文件</li>
+                        <li><strong>添加标签</strong>：双击文件卡片或点击"编辑标签"按钮为文件添加标签</li>
+                        <li><strong>预览文件</strong>：点击文件卡片上的预览按钮查看PPT内容</li>
+                        <li><strong>搜索文件</strong>：使用搜索框根据文件名或标签快速查找</li>
+                    </ol>
+                </div>
+                
+                <div class="help-section">
+                    <h3>⚡ 快捷键</h3>
+                    <ul>
+                        <li><strong>Ctrl + F</strong>：聚焦到搜索框</li>
+                        <li><strong>Esc</strong>：关闭当前打开的模态框</li>
+                        <li><strong>Enter</strong>：在标签输入框中添加标签</li>
+                        <li><strong>← →</strong>：在预览模式下切换文件</li>
+                    </ul>
+                </div>
+                
+                <div class="help-section">
+                    <h3>❓ 常见问题</h3>
+                    <div class="faq">
+                        <h4>Q: 为什么预览显示的是文件信息而不是PPT内容？</h4>
+                        <p>A: 这通常是因为未安装LibreOffice。请按照上述指南安装LibreOffice以获得真实的PPT内容预览。</p>
+                        
+                        <h4>Q: 软件支持哪些PPT格式？</h4>
+                        <p>A: 支持.ppt和.pptx格式的PowerPoint文件。</p>
+                        
+                        <h4>Q: 标签数据保存在哪里？</h4>
+                        <p>A: 标签数据保存在软件目录下的ppt-tags.json文件中，可以安全备份。</p>
+                    </div>
+                </div>
+                
+                <div class="help-section">
+                    <h3>📞 技术支持</h3>
+                    <p>如果您在使用过程中遇到问题，请检查：</p>
+                    <ul>
+                        <li>确保选择的文件夹包含PPT文件</li>
+                        <li>检查文件权限，确保软件可以读取文件</li>
+                        <li>如需LibreOffice预览，确保已正确安装LibreOffice</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

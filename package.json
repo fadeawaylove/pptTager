@@ -1,0 +1,33 @@
+{
+  "name": "ppt-tagger",
+  "version": "1.0.0",
+  "description": "A desktop application for managing and tagging PowerPoint files",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder"
+  },
+  "keywords": ["electron", "ppt", "powerpoint", "tagger", "desktop"],
+  "author": "邓润庭",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "fs-extra": "^11.1.1",
+    "path": "^0.12.7"
+  },
+  "build": {
+    "appId": "com.example.ppt-tagger",
+    "productName": "PPT Tagger",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*"
+    ]
+  }
+}
