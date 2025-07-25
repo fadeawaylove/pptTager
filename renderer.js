@@ -107,16 +107,24 @@ async function init() {
         updateStats();
         updateTagsPanel();
         
-        // 6. 应用启动时自动检查更新（静默检查）
+        // 6. 首次打开应用时在后台自动检查更新（静默检查）
+        // 延迟执行，确保不影响启动性能，并确保网络连接稳定后再检查
         setTimeout(() => {
+            console.log('开始静默检查更新...');
             checkForUpdatesQuietly();
-        }, 1000);
+        }, 3000);
         
         // 计算总耗时
         const totalTime = Date.now() - startTime;
         
-        // 如果任务完成太快，稍微延迟以确保用户看到启动画面
-        const minDisplayTime = 300;
+        // 确保启动画面显示足够时间，让用户看到内容加载完成
+        // 如果有文件夹和文件，等待内容渲染完成后再结束启动画面
+        let minDisplayTime = 800; // 基础显示时间
+        if (lastFolder && allFiles.length > 0) {
+            // 有内容时，确保用户能看到搜索结果展示
+            minDisplayTime = Math.max(1200, totalTime + 500);
+        }
+        
         if (totalTime < minDisplayTime) {
             const waitTime = minDisplayTime - totalTime;
             await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -126,8 +134,8 @@ async function init() {
         console.error('初始化过程中出错:', error);
         // 即使出错也要确保最小显示时间
         const elapsedTime = Date.now() - startTime;
-        if (elapsedTime < 800) {
-            await new Promise(resolve => setTimeout(resolve, 800 - elapsedTime));
+        if (elapsedTime < 1000) {
+            await new Promise(resolve => setTimeout(resolve, 1000 - elapsedTime));
         }
     } finally {
         // 同时切换：隐藏启动画面，显示主界面
@@ -250,15 +258,21 @@ function bindEvents() {
     });
     
     // 更新检查按钮事件
-    updateBtn.addEventListener('click', showUpdateModal);
-    closeUpdateBtn.addEventListener('click', closeUpdateModal);
+    if (updateBtn) {
+        updateBtn.addEventListener('click', showUpdateModal);
+    }
+    if (closeUpdateBtn) {
+        closeUpdateBtn.addEventListener('click', closeUpdateModal);
+    }
     
     // 点击更新检查模态框外部关闭
-    updateModal.addEventListener('click', (e) => {
-        if (e.target === updateModal) {
-            closeUpdateModal();
-        }
-    });
+    if (updateModal) {
+        updateModal.addEventListener('click', (e) => {
+            if (e.target === updateModal) {
+                closeUpdateModal();
+            }
+        });
+    }
     
     // 设置按钮事件
     if (settingsBtn) {
@@ -1293,24 +1307,114 @@ ipcRenderer.on('download-progress', (event, progressData) => {
     }
 });
 
+// 更新检查模态框函数
+function showUpdateModal() {
+    // 移除new标识
+    removeNewBadgeFromUpdateButton();
+    // 初始化版本信息
+    initVersionInfo();
+    // 显示模态框
+    if (updateModal) {
+        updateModal.classList.remove('hidden');
+    }
+}
+
+function closeUpdateModal() {
+    if (updateModal) {
+        updateModal.classList.add('hidden');
+    }
+}
+
 // 设置模态框函数
 function showSettingsModal() {
     loadCurrentSettings();
     settingsModal.classList.remove('hidden');
 }
 
-// 静默检查更新（应用启动时使用，不更新UI状态）
+// 静默检查更新（应用启动时使用，同时更新UI状态）
 async function checkForUpdatesQuietly() {
+    console.log('开始执行静默检查更新...');
     try {
+        console.log('调用 check-for-updates IPC...');
         const result = await ipcRenderer.invoke('check-for-updates');
+        console.log('检查更新结果:', result);
         
-        if (result.success && result.hasUpdate) {
-            // 如果有更新，显示一个简单的提示
-            showToast(`发现新版本 v${result.latestVersion}，点击"检查更新"按钮查看详情`, 'info', 8000);
+        if (result.success) {
+            // 更新最新版本显示
+            if (latestVersionEl) {
+                latestVersionEl.textContent = result.latestVersion;
+            }
+            
+            // 保存更新信息
+            updateInfo = result;
+            
+            if (result.hasUpdate) {
+                console.log('发现新版本，添加NEW标识');
+                // 如果有更新，在检查更新按钮上添加new标识
+                addNewBadgeToUpdateButton();
+                
+                // 更新UI状态
+                if (updateStatusEl) {
+                    updateStatusEl.textContent = '有新版本';
+                    updateStatusEl.className = 'update-status update-available';
+                }
+                
+                // 显示一个简单的提示
+                showToast(`发现新版本 v${result.latestVersion}，点击"检查更新"按钮查看详情`, 'info', 8000);
+            } else {
+                console.log('已是最新版本');
+                // 更新UI状态为最新版本
+                if (updateStatusEl) {
+                    updateStatusEl.textContent = '已是最新';
+                    updateStatusEl.className = 'update-status up-to-date';
+                }
+            }
+        } else {
+            console.log('检查更新失败:', result.error);
+            // 更新UI状态为检查失败
+            if (updateStatusEl) {
+                updateStatusEl.textContent = '检查失败';
+                updateStatusEl.className = 'update-status error';
+            }
+            if (latestVersionEl) {
+                latestVersionEl.textContent = '检查失败';
+            }
         }
     } catch (error) {
         // 静默失败，不显示错误信息
         console.log('静默检查更新失败:', error);
+        // 更新UI状态为检查失败
+        if (updateStatusEl) {
+            updateStatusEl.textContent = '检查失败';
+            updateStatusEl.className = 'update-status error';
+        }
+        if (latestVersionEl) {
+            latestVersionEl.textContent = '检查失败';
+        }
+    }
+}
+
+// 为检查更新按钮添加new标识
+function addNewBadgeToUpdateButton() {
+    const updateBtn = document.getElementById('updateBtn');
+    if (updateBtn && !updateBtn.querySelector('.new-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'new-badge';
+        badge.textContent = 'NEW';
+        updateBtn.appendChild(badge);
+        updateBtn.classList.add('has-update');
+    }
+}
+
+// 移除检查更新按钮的new标识
+function removeNewBadgeFromUpdateButton() {
+    const updateBtn = document.getElementById('updateBtn');
+    if (updateBtn) {
+        const badge = updateBtn.querySelector('.new-badge');
+        if (badge) {
+            badge.remove();
+        }
+        updateBtn.classList.remove('has-update');
     }
 }
 

@@ -44,6 +44,9 @@ function createWindow() {
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
   }
+  
+  // 临时启用开发者工具以调试更新检查功能
+  mainWindow.webContents.openDevTools();
 
   // 处理窗口关闭事件，显示确认弹框
   mainWindow.on('close', async (event) => {
@@ -65,6 +68,9 @@ function createWindow() {
     // 如果用户选择取消，什么都不做，窗口保持打开
   });
 }
+
+// 禁用GPU加速以解决兼容性问题
+app.disableHardwareAcceleration();
 
 // 应用准备就绪时创建窗口
 app.whenReady().then(createWindow);

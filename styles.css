@@ -218,6 +218,49 @@ body {
     background-color: #5a6268;
 }
 
+/* 检查更新按钮的new标识样式 */
+.btn.has-update {
+    position: relative;
+    animation: pulse-glow 2s infinite;
+}
+
+.new-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: linear-gradient(45deg, #ff4757, #ff3742);
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
+    animation: bounce-badge 1.5s infinite;
+    z-index: 10;
+    letter-spacing: 0.5px;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 71, 87, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(255, 71, 87, 0.6), 0 0 25px rgba(255, 71, 87, 0.3);
+    }
+}
+
+@keyframes bounce-badge {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0) scale(1);
+    }
+    40% {
+        transform: translateY(-3px) scale(1.1);
+    }
+    60% {
+        transform: translateY(-1px) scale(1.05);
+    }
+}
+
 /* 视图切换按钮样式 */
 .view-toggle {
     display: flex;
