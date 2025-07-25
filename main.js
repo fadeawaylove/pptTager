@@ -5,6 +5,9 @@ const { exec, spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 
+// 全局变量跟踪自动更新模式
+let isAutoUpdateMode = false;
+
 let mainWindow;
 const DATA_FILE = path.join(app.getPath('userData'), 'ppt-tags.json');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json');
@@ -45,11 +48,37 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
   
-  // 临时启用开发者工具以调试更新检查功能
-  mainWindow.webContents.openDevTools();
+  // 创建菜单以支持F12快捷键
+  const { Menu } = require('electron');
+  const template = [
+    {
+      label: '开发',
+      submenu: [
+        {
+          label: '切换开发者工具',
+          accelerator: 'F12',
+          click: () => {
+            if (mainWindow.webContents.isDevToolsOpened()) {
+              mainWindow.webContents.closeDevTools();
+            } else {
+              mainWindow.webContents.openDevTools();
+            }
+          }
+        }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 
-  // 处理窗口关闭事件，显示确认弹框
+  // 处理窗口关闭事件，显示确认弹窗
   mainWindow.on('close', async (event) => {
+    // 如果是自动更新模式，直接关闭窗口
+    if (isAutoUpdateMode) {
+      return;
+    }
+    
     event.preventDefault();
     
     const choice = await dialog.showMessageBox(mainWindow, {
@@ -410,6 +439,12 @@ function escapeXml(unsafe) {
   });
 }
 
+// 设置自动更新模式
+ipcMain.handle('set-auto-update-mode', async (event, enabled) => {
+  isAutoUpdateMode = enabled;
+  return { success: true };
+});
+
 // 版本检查相关功能
 
 // 获取当前应用版本
@@ -700,7 +735,8 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
       exec(`chmod +x "${downloadPath}" && "${downloadPath}"`);
     }
     
-    // 延迟退出应用程序，给安装程序时间启动
+    // 设置自动更新模式并延迟退出应用程序，给安装程序时间启动
+    isAutoUpdateMode = true;
     setTimeout(() => {
       app.quit();
     }, 2000);

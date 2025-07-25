@@ -1163,9 +1163,17 @@ async function initVersionInfo() {
 
 // 全局变量存储更新信息
 let updateInfo = null;
+// 全局变量跟踪下载状态
+let isDownloading = false;
 
 // 检查更新
 async function checkForUpdates() {
+    // 如果正在下载更新，禁止重复检查
+    if (isDownloading) {
+        showToast('正在下载更新，请稍候...', 'warning');
+        return;
+    }
+    
     // 更新UI状态
     updateStatusEl.textContent = '检查中...';
     updateStatusEl.className = 'update-status checking';
@@ -1253,9 +1261,18 @@ async function downloadAndInstallUpdate() {
     }
     
     try {
-        // 禁用下载按钮
+        // 设置下载状态
+        isDownloading = true;
+        
+        // 禁用下载按钮和检查更新按钮
         downloadUpdateBtn.disabled = true;
         downloadUpdateBtn.textContent = '准备下载...';
+        if (checkUpdateBtn) {
+            checkUpdateBtn.disabled = true;
+        }
+        
+        // 通知主进程即将开始自动更新，跳过关闭确认
+        await ipcRenderer.invoke('set-auto-update-mode', true);
         
         // 调用主进程下载并安装
         const result = await ipcRenderer.invoke('download-and-install-update', updateInfo.installerUrl);
@@ -1264,16 +1281,32 @@ async function downloadAndInstallUpdate() {
             showToast(result.message, 'success');
         } else {
             showToast('下载安装失败: ' + (result.error || '未知错误'), 'error');
-            // 恢复按钮状态
+            // 重置下载状态和恢复按钮状态
+            isDownloading = false;
             downloadUpdateBtn.disabled = false;
             downloadUpdateBtn.textContent = '自动下载安装';
+            if (checkUpdateBtn) {
+                checkUpdateBtn.disabled = false;
+            }
+            // 取消自动更新模式
+            await ipcRenderer.invoke('set-auto-update-mode', false);
         }
     } catch (error) {
         console.error('下载安装失败:', error);
         showToast('下载安装失败: ' + error.message, 'error');
-        // 恢复按钮状态
+        // 重置下载状态和恢复按钮状态
+        isDownloading = false;
         downloadUpdateBtn.disabled = false;
         downloadUpdateBtn.textContent = '自动下载安装';
+        if (checkUpdateBtn) {
+            checkUpdateBtn.disabled = false;
+        }
+        // 取消自动更新模式
+        try {
+            await ipcRenderer.invoke('set-auto-update-mode', false);
+        } catch (e) {
+            console.error('取消自动更新模式失败:', e);
+        }
     }
 }
 
@@ -1285,23 +1318,48 @@ ipcRenderer.on('download-progress', (event, progressData) => {
         case 'started':
             downloadUpdateBtn.textContent = '开始下载...';
             updateStatusEl.textContent = message;
+            // 确保按钮保持禁用状态
+            downloadUpdateBtn.disabled = true;
+            if (checkUpdateBtn) {
+                checkUpdateBtn.disabled = true;
+            }
             break;
         case 'downloading':
             downloadUpdateBtn.textContent = `下载中 ${progress}%`;
             updateStatusEl.textContent = message;
+            // 确保按钮保持禁用状态
+            downloadUpdateBtn.disabled = true;
+            if (checkUpdateBtn) {
+                checkUpdateBtn.disabled = true;
+            }
             break;
         case 'completed':
             downloadUpdateBtn.textContent = '启动安装...';
             updateStatusEl.textContent = message;
+            // 下载完成，即将退出应用，保持按钮禁用
+            downloadUpdateBtn.disabled = true;
+            if (checkUpdateBtn) {
+                checkUpdateBtn.disabled = true;
+            }
             break;
         case 'error':
             downloadUpdateBtn.textContent = '下载失败';
             updateStatusEl.textContent = message;
             showToast(message, 'error');
-            // 恢复按钮状态
-            setTimeout(() => {
+            // 重置下载状态和恢复按钮状态
+            isDownloading = false;
+            setTimeout(async () => {
                 downloadUpdateBtn.disabled = false;
                 downloadUpdateBtn.textContent = '自动下载安装';
+                if (checkUpdateBtn) {
+                    checkUpdateBtn.disabled = false;
+                }
+                // 取消自动更新模式
+                try {
+                    await ipcRenderer.invoke('set-auto-update-mode', false);
+                } catch (e) {
+                    console.error('取消自动更新模式失败:', e);
+                }
             }, 3000);
             break;
     }
