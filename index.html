@@ -225,6 +225,14 @@
                         
                         <h4>Q: 标签数据保存在哪里？</h4>
                         <p>A: 标签数据保存在软件目录下的ppt-tags.json文件中，可以安全备份。</p>
+                        
+                        <h4>Q: 检查更新时出现 "HTTP 403: rate limit exceeded" 错误怎么办？</h4>
+                        <p>A: 这是GitHub API请求限制导致的。<strong>解决方案</strong>：</p>
+                        <ul>
+                            <li><strong>临时解决</strong>：等待1小时后重试，或使用不同网络环境</li>
+                            <li><strong>永久解决</strong>：配置GitHub Token以提高API限制（从60次/小时提升到5000次/小时）</li>
+                        </ul>
+                        <p><strong>📋 GitHub Token配置指南</strong>：查看应用目录下的 <code>GITHUB_TOKEN_SETUP.md</code> 文件，或点击 <a href="#" class="github-token-link" data-action="open-github-token-guide">查看详细配置步骤</a></p>
                     </div>
                 </div>
                 
@@ -316,6 +324,21 @@
         </div>
     </div>
 
+    <!-- GitHub Token 指南模态框 -->
+    <div id="githubGuideModal" class="modal github-guide-modal hidden">
+        <div class="github-guide-content">
+            <div class="github-guide-header">
+                <h2>📖 GitHub Token 配置指南</h2>
+                <button id="closeGithubGuide" class="close-btn">&times;</button>
+            </div>
+            <div class="github-guide-body">
+                <div id="githubGuideContent" class="markdown-content">
+                    <div class="loading-indicator">正在加载指南内容...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 设置模态框 -->
     <div id="settingsModal" class="modal settings-modal hidden">
         <div class="settings-content">
@@ -345,6 +368,23 @@
                             <button id="resetTagsPath" class="btn btn-secondary btn-small">重置</button>
                         </div>
                         <p class="setting-description">设置标签数据文件的保存位置，默认使用应用数据目录。注意：更改此路径不会自动迁移现有标签数据</p>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3>🔑 GitHub API 设置</h3>
+                    
+                    <div class="setting-item">
+                        <label for="githubTokenInput">GitHub Token:</label>
+                        <div class="token-input-group">
+                            <input type="password" id="githubTokenInput" class="token-input" placeholder="输入您的GitHub Personal Access Token">
+                            <button id="toggleTokenVisibility" class="btn btn-secondary btn-small">👁️</button>
+                            <button id="clearToken" class="btn btn-secondary btn-small">清除</button>
+                        </div>
+                        <p class="setting-description">配置GitHub Token以提高API请求限制（从60次/小时提升到5000次/小时），避免更新检查时出现速率限制错误。Token仅用于版本检查，不会上传任何数据。</p>
+                        <div class="token-help">
+                            <a href="#" class="github-token-guide-link" data-action="open-guide">📖 查看GitHub Token获取指南</a>
+                        </div>
                     </div>
                 </div>
                 

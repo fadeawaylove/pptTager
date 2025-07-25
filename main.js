@@ -439,6 +439,97 @@ function escapeXml(unsafe) {
   });
 }
 
+// GitHub Token 存储文件路径
+const GITHUB_TOKEN_FILE = path.join(app.getPath('userData'), 'github-token.json');
+
+// 读取 GitHub Token 指南文件内容
+ipcMain.handle('read-github-token-guide', async () => {
+  try {
+    const guidePath = path.join(__dirname, 'GITHUB_TOKEN_SETUP.md');
+    
+    if (!await fs.pathExists(guidePath)) {
+      return {
+        success: false,
+        error: '指南文件不存在'
+      };
+    }
+    
+    const content = await fs.readFile(guidePath, 'utf8');
+    return {
+      success: true,
+      content: content
+    };
+  } catch (error) {
+    console.error('读取GitHub Token指南失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 保存 GitHub Token
+ipcMain.handle('save-github-token', async (event, token) => {
+  try {
+    const tokenData = {
+      token: token || '',
+      updatedAt: new Date().toISOString()
+    };
+    
+    await fs.ensureFile(GITHUB_TOKEN_FILE);
+    await fs.writeJson(GITHUB_TOKEN_FILE, tokenData, { spaces: 2 });
+    
+    return {
+      success: true
+    };
+  } catch (error) {
+    console.error('保存GitHub Token失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 获取 GitHub Token
+ipcMain.handle('get-github-token', async () => {
+  try {
+    if (!await fs.pathExists(GITHUB_TOKEN_FILE)) {
+      return {
+        success: true,
+        token: ''
+      };
+    }
+    
+    const tokenData = await fs.readJson(GITHUB_TOKEN_FILE);
+    return {
+      success: true,
+      token: tokenData.token || ''
+    };
+  } catch (error) {
+    console.error('读取GitHub Token失败:', error);
+    return {
+      success: true,
+      token: ''
+    };
+  }
+});
+
+// 获取 GitHub Token（内部使用）
+async function getGithubToken() {
+  try {
+    if (!await fs.pathExists(GITHUB_TOKEN_FILE)) {
+      return process.env.GITHUB_TOKEN || '';
+    }
+    
+    const tokenData = await fs.readJson(GITHUB_TOKEN_FILE);
+    return tokenData.token || process.env.GITHUB_TOKEN || '';
+  } catch (error) {
+    console.error('读取GitHub Token失败:', error);
+    return process.env.GITHUB_TOKEN || '';
+  }
+}
+
 // 设置自动更新模式
 ipcMain.handle('set-auto-update-mode', async (event, enabled) => {
   isAutoUpdateMode = enabled;
@@ -472,14 +563,23 @@ function compareVersions(version1, version2) {
 
 // 从GitHub检查最新版本
 function checkLatestVersion() {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    const headers = {
+      'User-Agent': 'PPT-Tagger-App',
+      'Accept': 'application/vnd.github.v3+json'
+    };
+    
+    // 获取GitHub Token（优先使用应用内设置，其次是环境变量）
+    const githubToken = await getGithubToken();
+    if (githubToken) {
+      headers['Authorization'] = `token ${githubToken}`;
+    }
+    
     const options = {
       hostname: 'api.github.com',
-      path: '/repos/fadeawaylove/pptTager/releases/latest', // 需要替换为实际的GitHub仓库
+      path: '/repos/fadeawaylove/pptTager/releases/latest',
       method: 'GET',
-      headers: {
-        'User-Agent': 'PPT-Tagger-App'
-      }
+      headers: headers
     };
     
     const req = https.request(options, (res) => {
@@ -535,6 +635,20 @@ function checkLatestVersion() {
               releaseNotes: release.body,
               publishedAt: release.published_at
             });
+          } else if (res.statusCode === 403) {
+            // 处理GitHub API限制错误
+            let errorMessage = 'GitHub API访问受限';
+            try {
+              const errorData = JSON.parse(data);
+              if (errorData.message && errorData.message.includes('rate limit exceeded')) {
+                errorMessage = 'GitHub API请求次数超限。未认证请求每小时限制60次，认证请求每小时限制5000次。建议稍后重试或联系开发者配置GitHub Token。';
+              } else {
+                errorMessage = `GitHub API访问被拒绝: ${errorData.message || '未知原因'}`;
+              }
+            } catch (e) {
+              // 如果无法解析错误响应，使用默认消息
+            }
+            reject(new Error(errorMessage));
           } else {
             reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
           }
@@ -617,6 +731,31 @@ ipcMain.handle('open-external-link', async (event, url) => {
     return { success: true };
   } catch (error) {
     console.error('打开外部链接失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// IPC处理程序：打开GitHub Token配置指南
+ipcMain.handle('open-github-token-guide', async () => {
+  try {
+    const guidePath = path.join(__dirname, 'GITHUB_TOKEN_SETUP.md');
+    
+    // 检查文件是否存在
+    if (await fs.pathExists(guidePath)) {
+      // 使用默认程序打开Markdown文件
+      await shell.openPath(guidePath);
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: '配置指南文件不存在'
+      };
+    }
+  } catch (error) {
+    console.error('打开GitHub Token配置指南失败:', error);
     return {
       success: false,
       error: error.message
@@ -738,6 +877,10 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
     // 设置自动更新模式并延迟退出应用程序，给安装程序时间启动
     isAutoUpdateMode = true;
     setTimeout(() => {
+      // 直接销毁主窗口，避免关闭确认对话框
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.destroy();
+      }
       app.quit();
     }, 2000);
     

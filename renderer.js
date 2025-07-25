@@ -1222,15 +1222,26 @@ async function checkForUpdates() {
             updateStatusEl.className = 'update-status error';
             latestVersionEl.textContent = '检查失败';
             
-            // 显示错误信息
-            showToast('检查更新失败: ' + (result.error || '网络连接错误'), 'error');
+            // 显示错误信息，特别处理GitHub API限制错误
+            let errorMessage = result.error || '网络连接错误';
+            if (errorMessage.includes('rate limit exceeded') || errorMessage.includes('GitHub API请求次数超限')) {
+                showToast('GitHub API请求受限，建议稍后重试或查看帮助文档了解如何配置GitHub Token以提高限制', 'warning', 10000);
+            } else {
+                showToast('检查更新失败: ' + errorMessage, 'error');
+            }
         }
     } catch (error) {
         console.error('检查更新失败:', error);
         updateStatusEl.textContent = '检查失败';
         updateStatusEl.className = 'update-status error';
         latestVersionEl.textContent = '检查失败';
-        showToast('检查更新失败: ' + error.message, 'error');
+        
+        // 特别处理GitHub API限制错误
+        if (error.message.includes('rate limit exceeded') || error.message.includes('GitHub API请求次数超限')) {
+            showToast('GitHub API请求受限，建议稍后重试或查看帮助文档了解如何配置GitHub Token以提高限制', 'warning', 10000);
+        } else {
+            showToast('检查更新失败: ' + error.message, 'error');
+        }
     } finally {
         // 恢复按钮状态
         checkUpdateBtn.disabled = false;
@@ -1437,6 +1448,12 @@ async function checkForUpdatesQuietly() {
             if (latestVersionEl) {
                 latestVersionEl.textContent = '检查失败';
             }
+            
+            // 如果是API限制错误，显示温和的提示
+            if (result.error && (result.error.includes('rate limit exceeded') || result.error.includes('GitHub API请求次数超限'))) {
+                console.log('GitHub API请求受限，建议配置GitHub Token');
+                // 静默检查时不显示toast，避免打扰用户
+            }
         }
     } catch (error) {
         // 静默失败，不显示错误信息
@@ -1480,3 +1497,220 @@ function removeNewBadgeFromUpdateButton() {
 if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', checkForUpdates);
 }
+
+// GitHub Token 设置相关元素
+const githubTokenInput = document.getElementById('githubTokenInput');
+const toggleTokenVisibility = document.getElementById('toggleTokenVisibility');
+const clearTokenBtn = document.getElementById('clearToken');
+const githubGuideModal = document.getElementById('githubGuideModal');
+const closeGithubGuide = document.getElementById('closeGithubGuide');
+const githubGuideContent = document.getElementById('githubGuideContent');
+
+// GitHub Token 可见性切换
+if (toggleTokenVisibility) {
+    toggleTokenVisibility.addEventListener('click', () => {
+        const input = githubTokenInput;
+        if (input.type === 'password') {
+            input.type = 'text';
+            toggleTokenVisibility.textContent = '🙈';
+        } else {
+            input.type = 'password';
+            toggleTokenVisibility.textContent = '👁️';
+        }
+    });
+}
+
+// 清除 GitHub Token
+if (clearTokenBtn) {
+    clearTokenBtn.addEventListener('click', () => {
+        if (githubTokenInput) {
+            githubTokenInput.value = '';
+            showToast('GitHub Token 已清除', 'info');
+        }
+    });
+}
+
+// 关闭 GitHub 指南模态框
+if (closeGithubGuide) {
+    closeGithubGuide.addEventListener('click', () => {
+        closeGithubGuideModal();
+    });
+}
+
+// 显示 GitHub 指南模态框
+function showGithubGuideModal() {
+    if (githubGuideModal) {
+        githubGuideModal.classList.remove('hidden');
+        loadGithubGuideContent();
+    }
+}
+
+// 关闭 GitHub 指南模态框
+function closeGithubGuideModal() {
+    if (githubGuideModal) {
+        githubGuideModal.classList.add('hidden');
+    }
+}
+
+// 加载 GitHub 指南内容
+async function loadGithubGuideContent() {
+    if (!githubGuideContent) return;
+    
+    try {
+        githubGuideContent.innerHTML = '<div class="loading-indicator">正在加载指南内容...</div>';
+        
+        // 调用主进程读取 Markdown 文件内容
+        const result = await ipcRenderer.invoke('read-github-token-guide');
+        
+        if (result.success) {
+            // 将 Markdown 转换为 HTML 并显示
+            githubGuideContent.innerHTML = convertMarkdownToHtml(result.content);
+        } else {
+            githubGuideContent.innerHTML = `
+                <div class="error-message">
+                    <h3>❌ 无法加载指南内容</h3>
+                    <p>错误信息: ${result.error}</p>
+                    <p>请查看应用目录下的 <code>GITHUB_TOKEN_SETUP.md</code> 文件。</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('加载GitHub指南内容失败:', error);
+        githubGuideContent.innerHTML = `
+            <div class="error-message">
+                <h3>❌ 加载失败</h3>
+                <p>无法读取指南文件，请查看应用目录下的 <code>GITHUB_TOKEN_SETUP.md</code> 文件。</p>
+            </div>
+        `;
+    }
+}
+
+// 简单的 Markdown 转 HTML 函数
+function convertMarkdownToHtml(markdown) {
+    let html = markdown
+        // 标题
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        // 粗体
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // 斜体
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // 代码块
+        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+        // 行内代码
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // 链接
+        .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        // 换行
+        .replace(/\n/g, '<br>');
+    
+    // 处理列表
+    html = html.replace(/^\d+\. (.*)$/gm, '<li>$1</li>');
+    html = html.replace(/^- (.*)$/gm, '<li>$1</li>');
+    html = html.replace(/((<li>.*<\/li>\s*)+)/g, '<ul>$1</ul>');
+    
+    // 处理段落
+    html = html.replace(/(<br>\s*){2,}/g, '</p><p>');
+    html = '<p>' + html + '</p>';
+    
+    return html;
+}
+
+// 加载 GitHub Token 设置
+async function loadGithubTokenSetting() {
+    try {
+        const result = await ipcRenderer.invoke('get-github-token');
+        if (result.success && result.token && githubTokenInput) {
+            githubTokenInput.value = result.token;
+        }
+    } catch (error) {
+        console.error('加载GitHub Token设置失败:', error);
+    }
+}
+
+// 保存 GitHub Token 设置
+async function saveGithubTokenSetting() {
+    if (!githubTokenInput) return;
+    
+    try {
+        const token = githubTokenInput.value.trim();
+        const result = await ipcRenderer.invoke('save-github-token', token);
+        
+        if (result.success) {
+            if (token) {
+                showToast('GitHub Token 已保存', 'success');
+            } else {
+                showToast('GitHub Token 已清除', 'info');
+            }
+        } else {
+            showToast('保存 GitHub Token 失败: ' + result.error, 'error');
+        }
+    } catch (error) {
+        console.error('保存GitHub Token失败:', error);
+        showToast('保存 GitHub Token 失败', 'error');
+    }
+}
+
+// 修改设置保存函数，包含 GitHub Token
+const originalSaveSettings = saveSettings;
+if (typeof saveSettings === 'function') {
+    window.saveSettings = async function() {
+        // 先保存 GitHub Token
+        await saveGithubTokenSetting();
+        // 然后保存其他设置
+        if (originalSaveSettings) {
+            await originalSaveSettings();
+        }
+    };
+}
+
+// 修改设置加载函数，包含 GitHub Token
+const originalLoadCurrentSettings = loadCurrentSettings;
+if (typeof loadCurrentSettings === 'function') {
+    window.loadCurrentSettings = async function() {
+        // 先加载 GitHub Token
+        await loadGithubTokenSetting();
+        // 然后加载其他设置
+        if (originalLoadCurrentSettings) {
+            await originalLoadCurrentSettings();
+        }
+    };
+}
+
+// 处理GitHub Token配置指南链接
+document.addEventListener('click', async (event) => {
+    // 处理帮助页面中的指南链接（外部打开）
+    if (event.target.classList.contains('github-token-link') && event.target.dataset.action === 'open-github-token-guide') {
+        event.preventDefault();
+        try {
+            // 调用主进程打开GitHub Token配置指南文件
+            await ipcRenderer.invoke('open-github-token-guide');
+        } catch (error) {
+            console.error('打开GitHub Token配置指南失败:', error);
+            showToast('无法打开配置指南文件，请查看应用目录下的 GITHUB_TOKEN_SETUP.md 文件', 'error');
+        }
+    }
+    
+    // 处理设置页面中的指南链接（应用内打开）
+    if (event.target.classList.contains('github-token-guide-link') && event.target.dataset.action === 'open-guide') {
+        event.preventDefault();
+        showGithubGuideModal();
+    }
+});
+
+// 点击模态框背景关闭
+if (githubGuideModal) {
+    githubGuideModal.addEventListener('click', (event) => {
+        if (event.target === githubGuideModal) {
+            closeGithubGuideModal();
+        }
+    });
+}
+
+// ESC 键关闭 GitHub 指南模态框
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && githubGuideModal && !githubGuideModal.classList.contains('hidden')) {
+        closeGithubGuideModal();
+    }
+});
