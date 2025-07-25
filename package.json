@@ -11,7 +11,10 @@
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
     "build:all": "electron-builder --win --mac --linux",
-    "pack": "electron-packager . PPT-Tagger --platform=win32 --arch=x64 --out=dist --overwrite"
+    "pack": "electron-packager . PPT-Tagger --platform=win32 --arch=x64 --out=dist --overwrite",
+    "release": "node release.js",
+    "release:win": "release.bat",
+    "release:ps": "powershell -ExecutionPolicy Bypass -File release.ps1"
   },
   "keywords": [
     "electron",
