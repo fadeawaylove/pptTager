@@ -549,6 +549,20 @@ ipcMain.handle('open-download-page', async (event, url) => {
   }
 });
 
+// IPC处理程序：打开外部链接
+ipcMain.handle('open-external-link', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('打开外部链接失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
 // 下载文件函数
 function downloadFile(url, outputPath, onProgress) {
   return new Promise((resolve, reject) => {

@@ -220,6 +220,25 @@ function bindEvents() {
         }
     });
     
+    // 处理帮助页面中的外部链接点击
+    helpModal.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('external-link')) {
+            e.preventDefault();
+            const url = e.target.getAttribute('data-url') || e.target.href;
+            if (url) {
+                try {
+                    const result = await ipcRenderer.invoke('open-external-link', url);
+                    if (!result.success) {
+                        showToast('打开链接失败: ' + (result.error || '未知错误'), 'error');
+                    }
+                } catch (error) {
+                    console.error('打开外部链接失败:', error);
+                    showToast('打开链接失败: ' + error.message, 'error');
+                }
+            }
+        }
+    });
+    
     // 设置按钮事件
     if (settingsBtn) {
         settingsBtn.addEventListener('click', showSettingsModal);

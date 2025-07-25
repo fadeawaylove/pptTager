@@ -1086,6 +1086,49 @@ body {
     text-decoration: underline;
 }
 
+/* 项目信息样式 */
+.project-info {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border-left: 4px solid #28a745;
+}
+
+.project-info h4 {
+    color: #28a745;
+    font-size: 16px;
+    margin: 20px 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.project-info h4:first-child {
+    margin-top: 0;
+}
+
+.external-link {
+    color: #007bff !important;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: inline-block;
+}
+
+.external-link:hover {
+    color: #0056b3 !important;
+    background-color: rgba(0, 123, 255, 0.1);
+    text-decoration: none;
+    transform: translateY(-1px);
+    cursor: pointer;
+}
+
+.external-link:active {
+    transform: translateY(0);
+}
+
 /* 帮助页面响应式设计 */
 @media (max-width: 768px) {
     .help-content {
