@@ -344,21 +344,29 @@ body {
 .tag-item {
     background-color: #e3f2fd;
     color: #1976d2;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .tag-item:hover {
     background-color: #bbdefb;
-    transform: scale(1.05);
+    transform: scale(1.08);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    border-color: #1976d2;
 }
 
 .tag-item.active {
     background-color: #1976d2;
     color: white;
+    border-color: #0d47a1;
+    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+    transform: scale(1.05);
 }
 
 .content {
@@ -541,9 +549,21 @@ body {
 .file-tag {
     background-color: #e8f5e8;
     color: #2e7d32;
-    padding: 2px 6px;
-    border-radius: 8px;
-    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 2px solid #c8e6c9;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.file-tag:hover {
+    background-color: #c8e6c9;
+    border-color: #2e7d32;
+    transform: scale(1.05);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
 }
 
 .file-actions {
@@ -721,12 +741,15 @@ body {
 .current-tag {
     background-color: #e3f2fd;
     color: #1976d2;
-    padding: 6px 12px;
-    border-radius: 15px;
-    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 8px;
+    border: 2px solid #bbdefb;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
 .remove-tag {
@@ -861,10 +884,21 @@ body {
 .preview-tags-list .tag {
     background: #667eea;
     color: white;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 2px solid #5a67d8;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.preview-tags-list .tag:hover {
+    background: #5a67d8;
+    border-color: #4c51bf;
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
 }
 
 .preview-info h3 {
