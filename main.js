@@ -439,8 +439,11 @@ function escapeXml(unsafe) {
   });
 }
 
-// GitHub Token 存储文件路径
-const GITHUB_TOKEN_FILE = path.join(app.getPath('userData'), 'github-token.json');
+// GitHub Token 存储文件路径（使用动态数据目录）
+function getGithubTokenPath() {
+  const dataDir = getActualDataDirectory();
+  return path.join(dataDir, 'github-token.json');
+}
 
 // 读取 GitHub Token 指南文件内容
 ipcMain.handle('read-github-token-guide', async () => {
@@ -476,8 +479,9 @@ ipcMain.handle('save-github-token', async (event, token) => {
       updatedAt: new Date().toISOString()
     };
     
-    await fs.ensureFile(GITHUB_TOKEN_FILE);
-    await fs.writeJson(GITHUB_TOKEN_FILE, tokenData, { spaces: 2 });
+    const tokenFile = getGithubTokenPath();
+    await fs.ensureFile(tokenFile);
+    await fs.writeJson(tokenFile, tokenData, { spaces: 2 });
     
     return {
       success: true
@@ -494,14 +498,15 @@ ipcMain.handle('save-github-token', async (event, token) => {
 // 获取 GitHub Token
 ipcMain.handle('get-github-token', async () => {
   try {
-    if (!await fs.pathExists(GITHUB_TOKEN_FILE)) {
+    const tokenFile = getGithubTokenPath();
+    if (!await fs.pathExists(tokenFile)) {
       return {
         success: true,
         token: ''
       };
     }
     
-    const tokenData = await fs.readJson(GITHUB_TOKEN_FILE);
+    const tokenData = await fs.readJson(tokenFile);
     return {
       success: true,
       token: tokenData.token || ''
@@ -518,11 +523,12 @@ ipcMain.handle('get-github-token', async () => {
 // 获取 GitHub Token（内部使用）
 async function getGithubToken() {
   try {
-    if (!await fs.pathExists(GITHUB_TOKEN_FILE)) {
+    const tokenFile = getGithubTokenPath();
+    if (!await fs.pathExists(tokenFile)) {
       return process.env.GITHUB_TOKEN || '';
     }
     
-    const tokenData = await fs.readJson(GITHUB_TOKEN_FILE);
+    const tokenData = await fs.readJson(tokenFile);
     return tokenData.token || process.env.GITHUB_TOKEN || '';
   } catch (error) {
     console.error('读取GitHub Token失败:', error);
@@ -912,28 +918,25 @@ ipcMain.handle('get-current-settings', async () => {
       settings = await fs.readJson(SETTINGS_FILE);
     }
     
-    // 获取当前实际使用的路径
-    const currentCachePath = settings.customCachePath || path.join(os.tmpdir(), 'ppt-previews');
-    const currentTagsPath = settings.customTagsPath || DATA_FILE;
+    // 获取当前实际使用的数据目录
+    const currentDataDirectory = getActualDataDirectory();
     
     return {
-      cachePath: currentCachePath,
-      tagsPath: currentTagsPath
+      dataDirectory: currentDataDirectory
     };
   } catch (error) {
     console.error('获取当前设置失败:', error);
     return {
-      cachePath: path.join(os.tmpdir(), 'ppt-previews'),
-      tagsPath: DATA_FILE
+      dataDirectory: getDefaultDataDirectory()
     };
   }
 });
 
-// 选择缓存路径
-ipcMain.handle('select-cache-path', async () => {
+// 选择数据目录
+ipcMain.handle('select-data-directory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    title: '选择预览缓存文件夹'
+    title: '选择数据存储目录'
   });
   
   if (!result.canceled && result.filePaths.length > 0) {
@@ -942,67 +945,25 @@ ipcMain.handle('select-cache-path', async () => {
   return null;
 });
 
-// 选择标签文件路径
-ipcMain.handle('select-tags-path', async () => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: '选择标签文件保存位置',
-    defaultPath: 'ppt-tags.json',
-    filters: [
-      { name: 'JSON文件', extensions: ['json'] },
-      { name: '所有文件', extensions: ['*'] }
-    ]
-  });
-  
-  if (!result.canceled && result.filePath) {
-    return result.filePath;
-  }
-  return null;
-});
-
-// 重置缓存路径
-ipcMain.handle('reset-cache-path', async () => {
+// 重置数据目录
+ipcMain.handle('reset-data-directory', async () => {
   try {
     let settings = {};
     if (await fs.pathExists(SETTINGS_FILE)) {
       settings = await fs.readJson(SETTINGS_FILE);
     }
     
-    // 删除自定义缓存路径设置
-    delete settings.customCachePath;
+    // 删除自定义数据目录设置
+    delete settings.customDataDirectory;
     await fs.writeJson(SETTINGS_FILE, settings, { spaces: 2 });
     
-    const defaultPath = path.join(os.tmpdir(), 'ppt-previews');
+    const defaultPath = getDefaultDataDirectory();
     return {
       success: true,
       path: defaultPath
     };
   } catch (error) {
-    console.error('重置缓存路径失败:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-});
-
-// 重置标签文件路径
-ipcMain.handle('reset-tags-path', async () => {
-  try {
-    let settings = {};
-    if (await fs.pathExists(SETTINGS_FILE)) {
-      settings = await fs.readJson(SETTINGS_FILE);
-    }
-    
-    // 删除自定义标签路径设置
-    delete settings.customTagsPath;
-    await fs.writeJson(SETTINGS_FILE, settings, { spaces: 2 });
-    
-    return {
-      success: true,
-      path: DATA_FILE
-    };
-  } catch (error) {
-    console.error('重置标签文件路径失败:', error);
+    console.error('重置数据目录失败:', error);
     return {
       success: false,
       error: error.message
@@ -1018,49 +979,61 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
       settings = await fs.readJson(SETTINGS_FILE);
     }
     
-    // 获取当前使用的路径
-    const currentCachePath = getActualCachePath();
-    let cachePathChanged = false;
-    let cacheMigrated = false;
+    // 获取当前使用的数据目录
+    const currentDataDirectory = getActualDataDirectory();
+    let dataDirectoryChanged = false;
+    let dataMigrated = false;
     
-    // 缓存目录迁移逻辑（只有路径真正改变时才迁移）
-    if (newSettings.cachePath && newSettings.cachePath !== currentCachePath) {
-      cachePathChanged = true;
-      console.log('检测到缓存路径更改，开始缓存迁移...');
+    // 数据目录迁移逻辑（只有路径真正改变时才迁移）
+    if (newSettings.dataDirectory && newSettings.dataDirectory !== currentDataDirectory) {
+      dataDirectoryChanged = true;
+      console.log('检测到数据目录更改，开始数据迁移...');
       
-      // 检查原缓存目录是否存在
-      if (await fs.pathExists(currentCachePath)) {
+      // 检查原数据目录是否存在
+      if (await fs.pathExists(currentDataDirectory)) {
         try {
-          // 确保新缓存目录存在
-          await fs.ensureDir(newSettings.cachePath);
+          // 确保新数据目录存在
+          await fs.ensureDir(newSettings.dataDirectory);
           
-          // 复制所有缓存文件
-          const files = await fs.readdir(currentCachePath);
-          for (const file of files) {
-            const srcFile = path.join(currentCachePath, file);
-            const destFile = path.join(newSettings.cachePath, file);
+          // 迁移所有数据文件
+          const filesToMigrate = [
+            'ppt-tags.json',
+            'github-token.json'
+          ];
+          
+          // 迁移文件
+          for (const fileName of filesToMigrate) {
+            const srcFile = path.join(currentDataDirectory, fileName);
+            const destFile = path.join(newSettings.dataDirectory, fileName);
             
-            if ((await fs.stat(srcFile)).isFile()) {
+            if (await fs.pathExists(srcFile)) {
               await fs.copy(srcFile, destFile);
+              console.log(`迁移文件: ${fileName}`);
             }
           }
           
-          cacheMigrated = true;
-          console.log('缓存文件迁移成功:', currentCachePath, '->', newSettings.cachePath);
+          // 迁移缓存目录
+          const srcCacheDir = path.join(currentDataDirectory, 'cache');
+          const destCacheDir = path.join(newSettings.dataDirectory, 'cache');
+          
+          if (await fs.pathExists(srcCacheDir)) {
+            await fs.copy(srcCacheDir, destCacheDir);
+            console.log('迁移缓存目录');
+          }
+          
+          dataMigrated = true;
+          console.log('数据迁移成功:', currentDataDirectory, '->', newSettings.dataDirectory);
         } catch (migrationError) {
-          console.warn('缓存迁移失败，但不影响功能:', migrationError.message);
+          console.warn('数据迁移失败，但不影响功能:', migrationError.message);
         }
       } else {
-        console.log('原缓存目录不存在，跳过缓存迁移');
+        console.log('原数据目录不存在，跳过数据迁移');
       }
     }
     
     // 更新设置
-    if (newSettings.cachePath) {
-      settings.customCachePath = newSettings.cachePath;
-    }
-    if (newSettings.tagsPath) {
-      settings.customTagsPath = newSettings.tagsPath;
+    if (newSettings.dataDirectory) {
+      settings.customDataDirectory = newSettings.dataDirectory;
     }
     
     // 保存设置文件
@@ -1068,8 +1041,8 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     
     return {
       success: true,
-      cachePathChanged,
-      cacheMigrated
+      dataDirectoryChanged,
+      dataMigrated
     };
   } catch (error) {
     console.error('保存设置失败:', error);
@@ -1080,30 +1053,40 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
   }
 });
 
-// 获取实际使用的缓存路径（用于内部使用）
-function getActualCachePath() {
+// 获取默认数据目录
+function getDefaultDataDirectory() {
+  return app.getPath('userData');
+}
+
+// 获取实际使用的数据目录（用于内部使用）
+function getActualDataDirectory() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const settings = fs.readJsonSync(SETTINGS_FILE);
-      return settings.customCachePath || path.join(os.tmpdir(), 'ppt-previews');
+      return settings.customDataDirectory || getDefaultDataDirectory();
     }
   } catch (error) {
-    console.log('读取缓存路径设置失败，使用默认路径');
+    console.log('读取数据目录设置失败，使用默认路径');
   }
-  return path.join(os.tmpdir(), 'ppt-previews');
+  return getDefaultDataDirectory();
+}
+
+// 获取实际使用的缓存路径（用于内部使用）
+function getActualCachePath() {
+  const dataDir = getActualDataDirectory();
+  return path.join(dataDir, 'cache');
 }
 
 // 获取实际使用的标签文件路径（用于内部使用）
 function getActualTagsPath() {
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const settings = fs.readJsonSync(SETTINGS_FILE);
-      return settings.customTagsPath || DATA_FILE;
-    }
-  } catch (error) {
-    console.log('读取标签路径设置失败，使用默认路径');
-  }
-  return DATA_FILE;
+  const dataDir = getActualDataDirectory();
+  return path.join(dataDir, 'ppt-tags.json');
+}
+
+// 获取GitHub Token文件路径
+function getGithubTokenPath() {
+  const dataDir = getActualDataDirectory();
+  return path.join(dataDir, 'github-token.json');
 }
 
 // 生成错误提示SVG

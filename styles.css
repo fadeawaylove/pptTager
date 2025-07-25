@@ -1378,6 +1378,52 @@ body {
     line-height: 1.4;
 }
 
+.data-directory-info {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+}
+
+.data-directory-info small {
+    color: #666;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.data-files-list {
+    margin: 0;
+    padding-left: 20px;
+    list-style-type: none;
+}
+
+.data-files-list li {
+    margin-bottom: 6px;
+    color: #666;
+    font-size: 12px;
+    position: relative;
+}
+
+.data-files-list li::before {
+    content: "•";
+    color: #28a745;
+    position: absolute;
+    left: -15px;
+    font-weight: bold;
+}
+
+.data-files-list code {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    font-weight: 500;
+}
+
 .current-paths {
     background-color: #f8f9fa;
     padding: 20px;
@@ -1765,7 +1811,7 @@ body {
 
 /* GitHub 指南模态框样式 */
 .github-guide-modal {
-    z-index: 1001;
+    z-index: 2001;
 }
 
 .github-guide-content {

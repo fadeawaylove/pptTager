@@ -41,13 +41,9 @@ const closeUpdateBtn = document.getElementById('closeUpdate');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const closeSettingsBtn = document.getElementById('closeSettings');
-const cachePathInput = document.getElementById('cachePathInput');
-const tagsPathInput = document.getElementById('tagsPathInput');
-const selectCachePathBtn = document.getElementById('selectCachePath');
-const selectTagsPathBtn = document.getElementById('selectTagsPath');
-const resetCachePathBtn = document.getElementById('resetCachePath');
-const resetTagsPathBtn = document.getElementById('resetTagsPath');
-// 移除已删除的元素引用
+const dataDirectoryInput = document.getElementById('dataDirectoryInput');
+const selectDataDirectoryBtn = document.getElementById('selectDataDirectory');
+const resetDataDirectoryBtn = document.getElementById('resetDataDirectory');
 const saveSettingsBtn = document.getElementById('saveSettings');
 const cancelSettingsBtn = document.getElementById('cancelSettings');
 
@@ -279,10 +275,8 @@ function bindEvents() {
         settingsBtn.addEventListener('click', showSettingsModal);
     }
     closeSettingsBtn.addEventListener('click', closeSettingsModal);
-    selectCachePathBtn.addEventListener('click', selectCachePath);
-    selectTagsPathBtn.addEventListener('click', selectTagsPath);
-    resetCachePathBtn.addEventListener('click', resetCachePath);
-    resetTagsPathBtn.addEventListener('click', resetTagsPath);
+    selectDataDirectoryBtn.addEventListener('click', selectDataDirectory);
+    resetDataDirectoryBtn.addEventListener('click', resetDataDirectory);
     saveSettingsBtn.addEventListener('click', saveSettings);
     cancelSettingsBtn.addEventListener('click', closeSettingsModal);
     
@@ -904,66 +898,37 @@ function closeSettingsModal() {
 async function loadCurrentSettings() {
     try {
         const settings = await ipcRenderer.invoke('get-current-settings');
-        cachePathInput.value = settings.cachePath || '';
-        tagsPathInput.value = settings.tagsPath || '';
+        dataDirectoryInput.value = settings.dataDirectory || '';
     } catch (error) {
         console.error('加载当前设置失败:', error);
-        cachePathInput.value = '';
-        tagsPathInput.value = '';
+        dataDirectoryInput.value = '';
     }
 }
 
-async function selectCachePath() {
+async function selectDataDirectory() {
     try {
-        const path = await ipcRenderer.invoke('select-cache-path');
+        const path = await ipcRenderer.invoke('select-data-directory');
         if (path) {
-            cachePathInput.value = path;
+            dataDirectoryInput.value = path;
         }
     } catch (error) {
-        console.error('选择缓存路径失败:', error);
-        alert('选择缓存路径失败');
+        console.error('选择数据目录失败:', error);
+        alert('选择数据目录失败');
     }
 }
 
-async function selectTagsPath() {
+async function resetDataDirectory() {
     try {
-        const path = await ipcRenderer.invoke('select-tags-path');
-        if (path) {
-            tagsPathInput.value = path;
-        }
-    } catch (error) {
-        console.error('选择标签路径失败:', error);
-        alert('选择标签路径失败');
-    }
-}
-
-async function resetCachePath() {
-    try {
-        const result = await ipcRenderer.invoke('reset-cache-path');
+        const result = await ipcRenderer.invoke('reset-data-directory');
         if (result.success) {
-            cachePathInput.value = result.path;
-            showToast('缓存路径已重置为默认值', 'success');
+            dataDirectoryInput.value = result.path;
+            showToast('数据目录已重置为默认值', 'success');
         } else {
-            showToast('重置缓存路径失败', 'error');
+            showToast('重置数据目录失败', 'error');
         }
     } catch (error) {
-        console.error('重置缓存路径失败:', error);
-        showToast('重置缓存路径失败', 'error');
-    }
-}
-
-async function resetTagsPath() {
-    try {
-        const result = await ipcRenderer.invoke('reset-tags-path');
-        if (result.success) {
-            tagsPathInput.value = result.path;
-            showToast('标签文件路径已重置为默认值', 'success');
-        } else {
-            showToast('重置标签文件路径失败', 'error');
-        }
-    } catch (error) {
-        console.error('重置标签文件路径失败:', error);
-        showToast('重置标签文件路径失败', 'error');
+        console.error('重置数据目录失败:', error);
+        showToast('重置数据目录失败', 'error');
     }
 }
 
@@ -1045,21 +1010,20 @@ function hideToast(toast) {
 async function saveSettings() {
     try {
         const settings = {
-            cachePath: cachePathInput.value.trim() || null,
-            tagsPath: tagsPathInput.value.trim() || null
+            dataDirectory: dataDirectoryInput.value.trim() || null
         };
         
         const result = await ipcRenderer.invoke('save-settings', settings);
         if (result.success) {
             let message = '设置保存成功！';
             
-            // 只有在缓存路径真正改变且成功迁移时才显示迁移提示
-            if (result.cachePathChanged && result.cacheMigrated) {
-                message += '\n\n已自动迁移您的原有缓存数据到新位置';
+            // 只有在数据目录真正改变且成功迁移时才显示迁移提示
+            if (result.dataDirectoryChanged && result.dataMigrated) {
+                message += '\n\n已自动迁移您的原有数据到新位置';
             }
             
             // 只有在路径真正改变时才提示重启
-            if (result.cachePathChanged) {
+            if (result.dataDirectoryChanged) {
                 message += '\n\n注意：路径更改将在下次启动应用时生效';
             }
             

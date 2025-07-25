@@ -348,26 +348,24 @@
             </div>
             <div class="settings-body">
                 <div class="settings-section">
-                    <h3>📁 文件路径设置</h3>
+                    <h3>📁 数据存储设置</h3>
                     
                     <div class="setting-item">
-                        <label for="cachePathInput">预览缓存路径:</label>
+                        <label for="dataDirectoryInput">数据存储目录:</label>
                         <div class="path-input-group">
-                            <input type="text" id="cachePathInput" class="path-input" placeholder="预览缓存保存路径" readonly>
-                            <button id="selectCachePath" class="btn btn-secondary btn-small">浏览</button>
-                            <button id="resetCachePath" class="btn btn-secondary btn-small">重置</button>
+                            <input type="text" id="dataDirectoryInput" class="path-input" placeholder="数据存储目录路径" readonly>
+                            <button id="selectDataDirectory" class="btn btn-secondary btn-small">浏览</button>
+                            <button id="resetDataDirectory" class="btn btn-secondary btn-small">重置</button>
                         </div>
-                        <p class="setting-description">设置PPT预览图片的缓存保存位置，默认使用系统临时目录</p>
-                    </div>
-                    
-                    <div class="setting-item">
-                        <label for="tagsPathInput">标签文件路径:</label>
-                        <div class="path-input-group">
-                            <input type="text" id="tagsPathInput" class="path-input" placeholder="标签文件保存路径" readonly>
-                            <button id="selectTagsPath" class="btn btn-secondary btn-small">浏览</button>
-                            <button id="resetTagsPath" class="btn btn-secondary btn-small">重置</button>
+                        <p class="setting-description">设置应用数据的统一存储目录，包括标签数据、预览缓存、GitHub Token等所有业务相关文件。更改目录时可选择是否迁移现有数据。</p>
+                        <div class="data-directory-info">
+                            <small>📂 此目录将包含以下文件：</small>
+                            <ul class="data-files-list">
+                                <li><code>ppt-tags.json</code> - 标签数据文件</li>
+                                <li><code>cache/</code> - PPT预览缓存目录</li>
+                                <li><code>github-token.json</code> - GitHub Token配置</li>
+                            </ul>
                         </div>
-                        <p class="setting-description">设置标签数据文件的保存位置，默认使用应用数据目录。注意：更改此路径不会自动迁移现有标签数据</p>
                     </div>
                 </div>
                 
