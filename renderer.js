@@ -634,19 +634,19 @@ function handleSearch() {
             const fileTags = tagsData[file.path] || [];
             const tagMatch = fileTags.some(tag => tag.toLowerCase().includes(query));
             
-            // 搜索选中的标签
+            // 搜索选中的标签 - 修改为AND逻辑：文件必须包含所有选中的标签
             const selectedTagMatch = selectedTags.size === 0 || 
-                fileTags.some(tag => selectedTags.has(tag));
+                Array.from(selectedTags).every(selectedTag => fileTags.includes(selectedTag));
             
             return (nameMatch || tagMatch) && selectedTagMatch;
         });
     }
     
-    // 如果有选中的标签但没有搜索词，只按标签过滤
+    // 如果有选中的标签但没有搜索词，只按标签过滤 - 修改为AND逻辑
     if (!query && selectedTags.size > 0) {
         filteredFiles = allFiles.filter(file => {
             const fileTags = tagsData[file.path] || [];
-            return fileTags.some(tag => selectedTags.has(tag));
+            return Array.from(selectedTags).every(selectedTag => fileTags.includes(selectedTag));
         });
     }
     
