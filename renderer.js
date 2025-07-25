@@ -23,6 +23,7 @@ const searchInput = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearch');
 const totalFilesEl = document.getElementById('totalFiles');
 const taggedFilesEl = document.getElementById('taggedFiles');
+const filteredFilesEl = document.getElementById('filteredFiles');
 const allTagsEl = document.getElementById('allTags');
 const gridViewBtn = document.getElementById('gridViewBtn');
 const listViewBtn = document.getElementById('listViewBtn');
@@ -71,7 +72,32 @@ const editPreviewTagsBtn = document.getElementById('editPreviewTags');
 const openPreviewFileBtn = document.getElementById('openPreviewFile');
 const previewTagsEl = document.getElementById('previewTags');
 
+// 动态调整字体大小
+function adjustFontSize() {
+    const screenWidth = window.screen.width;
+    const screenHeight = window.screen.height;
+    
+    // 基于屏幕宽度计算缩放因子
+    // 1920px作为基准分辨率，字体大小为16px
+    let scaleFactor = screenWidth / 1920;
+    
+    // 限制缩放范围，避免字体过大或过小
+    scaleFactor = Math.max(0.8, Math.min(1.5, scaleFactor));
+    
+    // 计算基础字体大小
+    const baseFontSize = Math.round(16 * scaleFactor);
+    
+    // 应用到CSS变量
+    document.documentElement.style.setProperty('--base-font-size', baseFontSize + 'px');
+    document.documentElement.style.setProperty('--scale-factor', scaleFactor);
+    
+    console.log(`屏幕分辨率: ${screenWidth}x${screenHeight}`);
+    console.log(`字体缩放因子: ${scaleFactor.toFixed(2)}`);
+    console.log(`基础字体大小: ${baseFontSize}px`);
+}
+
 // 初始化
+adjustFontSize(); // 先调整字体大小
 init();
 
 async function init() {
@@ -158,6 +184,14 @@ async function init() {
 function bindEvents() {
     // 选择文件夹
     selectFolderBtn.addEventListener('click', selectFolder);
+    
+    // 刷新文件夹
+    const refreshFolderBtn = document.getElementById('refreshFolder');
+    refreshFolderBtn.addEventListener('click', async () => {
+        if (currentFolder) {
+            await scanFiles();
+        }
+    });
     
     // 搜索
     searchInput.addEventListener('input', handleSearch);
@@ -356,7 +390,7 @@ async function scanFiles() {
     showLoading();
     
     try {
-        const files = await ipcRenderer.invoke('scan-files', currentFolder);
+        const files = await ipcRenderer.invoke('scan-ppt-files', currentFolder);
         allFiles = files;
         filteredFiles = [...allFiles];
         
@@ -677,6 +711,7 @@ function handleSearch() {
     }
     
     renderFiles();
+    updateStats();
 }
 
 function clearSearch() {
@@ -692,6 +727,7 @@ function updateStats() {
         tagsData[file.path] && tagsData[file.path].length > 0
     ).length;
     taggedFilesEl.textContent = taggedCount;
+    filteredFilesEl.textContent = filteredFiles.length;
 }
 
 function updateTagsPanel() {
@@ -772,6 +808,7 @@ async function showPreview() {
     
     const file = previewFiles[currentPreviewIndex];
     previewFileName.textContent = file.name;
+    previewFileName.title = file.name; // 显示完整文件名
     previewCounter.textContent = `${currentPreviewIndex + 1} / ${previewFiles.length}`;
     
     // 显示当前文件的标签
@@ -784,9 +821,19 @@ async function showPreview() {
     // 显示模态框
     previewModal.classList.remove('hidden');
     
+    // 设置10秒超时
+    const timeoutId = setTimeout(() => {
+        console.log('预览生成超时，显示超时提示');
+        previewLoading.classList.add('hidden');
+        showTimeoutMessage();
+    }, 10000);
+    
     try {
         // 获取PPT预览
         const result = await ipcRenderer.invoke('get-ppt-preview', file.path);
+        
+        // 清除超时定时器
+        clearTimeout(timeoutId);
         
         if (result.success) {
             // 成功获取图片预览
@@ -804,6 +851,8 @@ async function showPreview() {
             previewImage.classList.remove('hidden');
         }
     } catch (error) {
+        // 清除超时定时器
+        clearTimeout(timeoutId);
         console.error('获取预览失败:', error);
         previewImage.src = '';
         previewImage.alt = '预览加载失败';
@@ -840,6 +889,49 @@ function showNextPreview() {
         currentPreviewIndex++;
     }
     showPreview();
+}
+
+function showTimeoutMessage() {
+    // 创建超时提示的SVG
+    const timeoutSVG = `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="timeoutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#ee5a52;stop-opacity:1" />
+            </linearGradient>
+        </defs>
+        
+        <rect width="400" height="300" fill="url(#timeoutGradient)" rx="15"/>
+        
+        <!-- 时钟图标 -->
+        <circle cx="200" cy="80" r="30" fill="white" opacity="0.9"/>
+        <text x="200" y="90" text-anchor="middle" font-family="Arial" font-size="24" fill="#ff6b6b">⏰</text>
+        
+        <!-- 标题 -->
+        <text x="200" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">
+            预览生成超时
+        </text>
+        
+        <!-- 说明文字 -->
+        <text x="200" y="160" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="white" opacity="0.9">
+            PPT文件较大或系统繁忙，预览生成时间超过10秒
+        </text>
+        
+        <!-- 建议 -->
+        <text x="200" y="190" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white" opacity="0.8">
+            建议：直接打开文件查看内容
+        </text>
+        
+        <!-- 重试按钮提示 -->
+        <rect x="150" y="210" width="100" height="30" fill="white" opacity="0.2" rx="15"/>
+        <text x="200" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">
+            可以重新打开预览重试
+        </text>
+    </svg>`;
+    
+    const svgDataUrl = `data:image/svg+xml;base64,${btoa(timeoutSVG)}`;
+    previewImage.src = svgDataUrl;
+    previewImage.classList.remove('hidden');
 }
 
 function closePreviewModal() {

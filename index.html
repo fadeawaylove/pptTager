@@ -30,6 +30,7 @@
             <div class="controls">
                 <div class="controls-left">
                     <button id="selectFolder" class="btn btn-primary">选择文件夹</button>
+                    <button id="refreshFolder" class="btn btn-secondary" title="刷新文件夹">🔄 刷新</button>
                     <div class="search-container">
                         <input type="text" id="searchInput" placeholder="搜索PPT文件或标签..." class="search-input">
                         <button id="clearSearch" class="btn btn-secondary">清除</button>
@@ -81,6 +82,7 @@
                     <h3>统计信息</h3>
                     <p>总文件数: <span id="totalFiles">0</span></p>
                     <p>已标记: <span id="taggedFiles">0</span></p>
+                    <p>当前显示: <span id="filteredFiles">0</span></p>
                 </div>
             </div>
 
@@ -124,8 +126,12 @@
     <div id="previewModal" class="modal preview-modal hidden">
         <div class="preview-content">
             <div class="preview-header">
-                <div class="preview-info">
-                    <h3 id="previewFileName">文件名</h3>
+                <div class="preview-info-line">
+                    <h3 id="previewFileName" class="preview-filename" title="">文件名</h3>
+                    <div class="preview-tags-inline">
+                        <span class="preview-tags-label">标签:</span>
+                        <div id="previewTags" class="preview-tags-list"></div>
+                    </div>
                     <span id="previewCounter" class="preview-counter">1 / 1</span>
                 </div>
                 <div class="preview-actions">
@@ -134,20 +140,16 @@
                     <button id="closePreview" class="close-btn">&times;</button>
                 </div>
             </div>
-            <div class="preview-tags">
-                <div class="preview-tags-label">标签:</div>
-                <div id="previewTags" class="preview-tags-list"></div>
-            </div>
             <div class="preview-body">
-                <div id="previewLoading" class="preview-loading hidden">
-                    <div class="loading-spinner"></div>
-                    <p>正在生成预览...</p>
+                <button id="prevBtn" class="nav-arrow nav-arrow-left" title="上一个">‹</button>
+                <div class="preview-content-area">
+                    <div id="previewLoading" class="preview-loading hidden">
+                        <div class="loading-spinner"></div>
+                        <p>正在生成预览...</p>
+                    </div>
+                    <img id="previewImage" class="preview-image" alt="PPT预览" />
                 </div>
-                <img id="previewImage" class="preview-image" alt="PPT预览" />
-            </div>
-            <div class="preview-navigation">
-                <button id="prevBtn" class="nav-btn prev-btn">‹ 上一个</button>
-                <button id="nextBtn" class="nav-btn next-btn">下一个 ›</button>
+                <button id="nextBtn" class="nav-arrow nav-arrow-right" title="下一个">›</button>
             </div>
         </div>
     </div>

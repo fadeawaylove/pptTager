@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const { exec, spawn } = require('child_process');
@@ -24,16 +24,39 @@ function createWindow() {
     iconPath = path.join(__dirname, 'assets/icon.png');
   }
   
+  // 获取主显示器信息
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+  
+  // 计算窗口大小为屏幕的3/4
+  const windowWidth = Math.floor(screenWidth * 0.75);
+  const windowHeight = Math.floor(screenHeight * 0.75);
+  
+  // 设置最小和最大尺寸限制
+  const minWidth = 1000;
+  const minHeight = 800;
+  const maxWidth = 1920;
+  const maxHeight = 1440;
+  
+  // 应用限制
+  const finalWidth = Math.max(minWidth, Math.min(maxWidth, windowWidth));
+  const finalHeight = Math.max(minHeight, Math.min(maxHeight, windowHeight));
+  
+  console.log(`屏幕分辨率: ${screenWidth}x${screenHeight}`);
+  console.log(`窗口大小: ${finalWidth}x${finalHeight}`);
+  
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 1200,
+    width: finalWidth,
+    height: finalHeight,
     icon: iconPath,
     show: false, // 防止闪动，等内容加载完成后再显示
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     },
-    autoHideMenuBar: true
+    autoHideMenuBar: true,
+    minWidth: minWidth,
+    minHeight: minHeight
   });
 
   // 等待页面准备就绪后再显示窗口，防止闪动

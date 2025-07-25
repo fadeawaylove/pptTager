@@ -1,3 +1,13 @@
+/* 根字体大小，将根据屏幕分辨率动态调整 */
+:root {
+    --base-font-size: 16px;
+    --scale-factor: 1;
+}
+
+html {
+    font-size: var(--base-font-size);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -9,6 +19,7 @@ body {
     background-color: #f5f5f5;
     color: #333;
     overflow-x: hidden;
+    font-size: 1rem; /* 使用相对单位 */
 }
 
 /* 启动画面样式 */
@@ -42,16 +53,16 @@ body {
 }
 
 .logo-icon {
-    font-size: 80px;
-    margin-bottom: 20px;
+    font-size: 5rem; /* 80px -> 5rem */
+    margin-bottom: 1.25rem;
     animation: bounce 2s infinite;
 }
 
 .logo-text {
-    font-size: 32px;
+    font-size: 2rem; /* 32px -> 2rem */
     font-weight: 300;
     margin: 0;
-    letter-spacing: 2px;
+    letter-spacing: 0.125rem;
     animation: fadeInUp 1s ease-out;
 }
 
@@ -87,7 +98,7 @@ body {
 }
 
 .loading-text {
-    font-size: 16px;
+    font-size: 1rem; /* 16px -> 1rem */
     opacity: 0.9;
     animation: fadeInUp 1s ease-out 0.5s both;
 }
@@ -148,8 +159,8 @@ body {
 }
 
 .header h1 {
-    margin-bottom: 15px;
-    font-size: 24px;
+    margin-bottom: 0.9375rem;
+    font-size: 1.5rem; /* 24px -> 1.5rem */
     font-weight: 300;
 }
 
@@ -181,20 +192,20 @@ body {
 }
 
 .search-input {
-    padding: 8px 12px;
+    padding: 0.5rem 0.75rem;
     border: none;
-    border-radius: 20px;
-    width: 300px;
-    font-size: 14px;
+    border-radius: 1.25rem;
+    width: 18.75rem; /* 300px -> 18.75rem */
+    font-size: 0.875rem; /* 14px -> 0.875rem */
     outline: none;
 }
 
 .btn {
-    padding: 8px 16px;
+    padding: 0.5rem 1rem;
     border: none;
-    border-radius: 20px;
+    border-radius: 1.25rem;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.875rem; /* 14px -> 0.875rem */
     transition: all 0.3s ease;
     font-weight: 500;
 }
@@ -344,10 +355,10 @@ body {
 .tag-item {
     background-color: #e3f2fd;
     color: #1976d2;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: calc(0.75rem * var(--scale-factor));
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
     border: 2px solid transparent;
@@ -454,7 +465,7 @@ body {
 }
 
 .files-list .file-tag {
-    font-size: 16px;
+    font-size: 11px;
     padding: 2px 6px;
 }
 
@@ -550,12 +561,12 @@ body {
 .file-tag {
     background-color: #e8f5e8;
     color: #2e7d32;
-    padding: 6px 12px;
-    border-radius: 15px;
-    font-size: 16px;
-    font-weight: 600;
-    border: 2px solid #c8e6c9;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid #c8e6c9;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     transition: all 0.2s ease;
     cursor: pointer;
 }
@@ -833,20 +844,69 @@ body {
 .preview-content {
     background: #1a1a1a;
     border-radius: 10px;
-    width: 90vw;
-    height: 90vh;
-    max-width: 1200px;
+    width: 95vw;
+    height: 95vh;
+    max-width: none;
     display: flex;
     flex-direction: column;
     color: white;
 }
 
 .preview-header {
-    padding: 20px;
+    padding: 12px 20px;
     border-bottom: 1px solid #333;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
+}
+
+.preview-info-line {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+    min-width: 0;
+}
+
+.preview-filename {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+
+.preview-tags-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.preview-tags-inline .preview-tags-label {
+    font-weight: 500;
+    color: #ccc;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.preview-tags-inline .preview-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+}
+
+.preview-counter {
+    font-size: 14px;
+    color: #ccc;
+    flex-shrink: 0;
 }
 
 .preview-actions {
@@ -860,46 +920,25 @@ body {
     font-size: 12px;
 }
 
-.preview-tags {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 20px;
-    background: #2a2a2a;
-    border-bottom: 1px solid #333;
-    min-height: 40px;
-}
-
-.preview-tags-label {
-    font-weight: 500;
-    color: #ccc;
-    font-size: 14px;
-}
-
-.preview-tags-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
+/* 原标签区域样式已移除，标签现在显示在头部一行 */
 
 .preview-tags-list .tag {
     background: #667eea;
     color: white;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 600;
-    border: 2px solid #5a67d8;
-    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid #5a67d8;
     transition: all 0.2s ease;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .preview-tags-list .tag:hover {
     background: #5a67d8;
     border-color: #4c51bf;
     transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
 }
 
 .preview-info h3 {
@@ -917,16 +956,81 @@ body {
     flex: 1;
     display: flex;
     align-items: center;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.preview-content-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
     justify-content: center;
     position: relative;
     overflow: hidden;
+    padding: 10px 80px;
+}
+
+.nav-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(102, 126, 234, 0.3);
+    color: white;
+    border: none;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 5;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    opacity: 0.7;
+}
+
+.nav-arrow:hover:not(:disabled) {
+    background: rgba(102, 126, 234, 0.6);
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    opacity: 1;
+}
+
+.nav-arrow:disabled {
+    background: rgba(51, 51, 51, 0.6);
+    color: #666;
+    cursor: not-allowed;
+    transform: translateY(-50%);
+}
+
+.nav-arrow:disabled:hover {
+    transform: translateY(-50%);
+    background: rgba(51, 51, 51, 0.3);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    opacity: 0.3;
+}
+
+.nav-arrow-left {
+    left: 10px;
+}
+
+.nav-arrow-right {
+    right: 10px;
 }
 
 .preview-image {
-    width: 100%;
+    max-width: 100%;
     max-height: 100%;
+    width: auto;
+    height: auto;
     object-fit: contain;
     border-radius: 5px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .preview-loading {
@@ -951,37 +1055,7 @@ body {
     100% { transform: rotate(360deg); }
 }
 
-.preview-navigation {
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    border-top: 1px solid #333;
-}
-
-.nav-btn {
-    padding: 10px 20px;
-    background-color: #667eea;
-    color: white;
-    border: none;
-    border-radius: 25px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    min-width: 120px;
-}
-
-.nav-btn:hover:not(:disabled) {
-    background-color: #5a67d8;
-    transform: translateY(-2px);
-}
-
-.nav-btn:disabled {
-    background-color: #333;
-    color: #666;
-    cursor: not-allowed;
-    transform: none;
-}
+/* 原导航按钮样式已移除，改为箭头样式 */
 
 .close-btn {
     color: #ccc;
