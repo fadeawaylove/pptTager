@@ -223,6 +223,20 @@ function bindEvents() {
         }
     });
     
+    // 预览模态框鼠标滚轮事件
+    previewModal.addEventListener('wheel', (e) => {
+        if (!previewModal.classList.contains('hidden')) {
+            e.preventDefault();
+            if (e.deltaY > 0) {
+                // 向下滚动，显示下一张
+                showNextPreview();
+            } else {
+                // 向上滚动，显示上一张
+                showPrevPreview();
+            }
+        }
+    });
+    
     // 帮助按钮事件
     helpBtn.addEventListener('click', showHelpModal);
     closeHelpBtn.addEventListener('click', closeHelpModal);
