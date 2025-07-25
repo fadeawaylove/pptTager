@@ -451,10 +451,22 @@ function createFileCard(file) {
         </div>
     `;
     
+    // 为文件标签添加点击事件
+    const fileTagsContainer = card.querySelector('.file-tags');
+    if (fileTagsContainer) {
+        fileTagsContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('file-tag')) {
+                e.stopPropagation(); // 阻止事件冒泡
+                const tagText = e.target.textContent;
+                toggleTagFilter(tagText);
+            }
+        });
+    }
+    
     // 添加卡片点击事件预览
     card.addEventListener('click', (e) => {
-        // 如果点击的是按钮，不触发预览
-        if (!e.target.closest('.file-actions')) {
+        // 如果点击的是按钮或标签，不触发预览
+        if (!e.target.closest('.file-actions') && !e.target.classList.contains('file-tag')) {
             previewFile(file.path);
         }
     });
@@ -1095,10 +1107,22 @@ function createListFileCard(file) {
         </div>
     `;
     
+    // 为文件标签添加点击事件
+    const fileTagsContainer = card.querySelector('.file-tags');
+    if (fileTagsContainer) {
+        fileTagsContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('file-tag')) {
+                e.stopPropagation(); // 阻止事件冒泡
+                const tagText = e.target.textContent;
+                toggleTagFilter(tagText);
+            }
+        });
+    }
+    
     // 添加卡片点击事件预览
     card.addEventListener('click', (e) => {
-        // 如果点击的是按钮，不触发预览
-        if (!e.target.closest('.file-actions')) {
+        // 如果点击的是按钮或标签，不触发预览
+        if (!e.target.closest('.file-actions') && !e.target.classList.contains('file-tag')) {
             previewFile(file.path);
         }
     });
