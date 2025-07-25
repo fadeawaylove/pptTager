@@ -1658,16 +1658,10 @@ if (typeof loadCurrentSettings === 'function') {
 
 // 处理GitHub Token配置指南链接
 document.addEventListener('click', async (event) => {
-    // 处理帮助页面中的指南链接（外部打开）
-    if (event.target.classList.contains('github-token-link') && event.target.dataset.action === 'open-github-token-guide') {
+    // 处理帮助页面中的指南链接（弹出页面显示）
+    if (event.target.classList.contains('github-token-link') && event.target.dataset.action === 'show-github-guide') {
         event.preventDefault();
-        try {
-            // 调用主进程打开GitHub Token配置指南文件
-            await ipcRenderer.invoke('open-github-token-guide');
-        } catch (error) {
-            console.error('打开GitHub Token配置指南失败:', error);
-            showToast('无法打开配置指南文件，请查看应用目录下的 GITHUB_TOKEN_SETUP.md 文件', 'error');
-        }
+        showGithubGuideModal();
     }
     
     // 处理设置页面中的指南链接（应用内打开）
