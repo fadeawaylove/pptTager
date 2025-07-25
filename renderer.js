@@ -42,8 +42,7 @@ const selectCachePathBtn = document.getElementById('selectCachePath');
 const selectTagsPathBtn = document.getElementById('selectTagsPath');
 const resetCachePathBtn = document.getElementById('resetCachePath');
 const resetTagsPathBtn = document.getElementById('resetTagsPath');
-const currentCachePathEl = document.getElementById('currentCachePath');
-const currentTagsPathEl = document.getElementById('currentTagsPath');
+// 移除已删除的元素引用
 const saveSettingsBtn = document.getElementById('saveSettings');
 const cancelSettingsBtn = document.getElementById('cancelSettings');
 
@@ -75,104 +74,69 @@ const previewTagsEl = document.getElementById('previewTags');
 init();
 
 async function init() {
-    console.log('🚀 [INIT] 开始初始化');
-    
     // 显示启动画面，隐藏主界面
     const splashScreen = document.getElementById('splashScreen');
     const container = document.querySelector('.container');
     
-    console.log('🎬 [INIT] 启动画面状态:', splashScreen ? '已找到' : '未找到');
-    console.log('📦 [INIT] 主容器状态:', container ? '已找到' : '未找到');
-    
     // 记录启动时间
     const startTime = Date.now();
     
-    console.log('⏰ [INIT] 启动时间:', new Date(startTime).toLocaleTimeString());
-    
     try {
-        console.log('📋 [INIT] 开始执行所有初始化任务');
-        
-        // 1. 加载已保存的标签数据
-        console.log('🏷️ [INIT] 正在加载标签数据...');
-        tagsData = await ipcRenderer.invoke('load-tags');
-        console.log('✅ [INIT] 标签数据加载完成 - 数量:', Object.keys(tagsData || {}).length);
-        
-        // 2. 绑定事件
-        console.log('🔗 [INIT] 正在绑定事件...');
-        bindEvents();
-        console.log('✅ [INIT] 事件绑定完成');
-        
-        // 3. 获取上次选择的文件夹
-        console.log('📁 [INIT] 正在获取上次选择的文件夹...');
+        // 1. 获取上次选择的文件夹
         const lastFolder = await ipcRenderer.invoke('get-last-folder');
-        console.log('✅ [INIT] 文件夹信息获取完成:', lastFolder || '无');
+        
+        // 2. 加载已保存的标签数据
+        tagsData = await ipcRenderer.invoke('load-tags', lastFolder);
+        
+        // 3. 绑定事件
+        bindEvents();
         
         // 4. 如果有上次选择的文件夹，扫描文件
         if (lastFolder) {
-            console.log('📂 [INIT] 正在扫描文件夹:', lastFolder);
             currentFolder = lastFolder;
             currentFolderEl.textContent = lastFolder;
             await scanFilesQuietly();
-            console.log('✅ [INIT] 文件扫描完成，找到文件数:', allFiles.length);
-        } else {
-            console.log('ℹ️ [INIT] 没有上次选择的文件夹，跳过文件扫描');
         }
         
         // 5. 更新统计信息和标签面板
-        console.log('📊 [INIT] 正在更新统计信息和标签面板...');
         updateStats();
         updateTagsPanel();
-        console.log('✅ [INIT] 统计信息和标签面板更新完成');
         
         // 计算总耗时
         const totalTime = Date.now() - startTime;
-        console.log('⏱️ [INIT] 所有任务完成，总耗时:', totalTime + 'ms');
         
         // 如果任务完成太快，稍微延迟以确保用户看到启动画面
         const minDisplayTime = 300;
         if (totalTime < minDisplayTime) {
             const waitTime = minDisplayTime - totalTime;
-            console.log('⏳ [INIT] 任务完成太快，等待', waitTime + 'ms', '以确保启动画面可见');
             await new Promise(resolve => setTimeout(resolve, waitTime));
         }
         
-        console.log('✨ [INIT] 所有初始化任务完成，准备切换界面');
-        
     } catch (error) {
-        console.error('❌ [INIT] 初始化过程中出错:', error);
+        console.error('初始化过程中出错:', error);
         // 即使出错也要确保最小显示时间
         const elapsedTime = Date.now() - startTime;
         if (elapsedTime < 800) {
             await new Promise(resolve => setTimeout(resolve, 800 - elapsedTime));
         }
     } finally {
-        console.log('🎭 [INIT] 开始界面切换');
-        
         // 同时切换：隐藏启动画面，显示主界面
         splashScreen.classList.add('fade-out');
         container.classList.add('show');
-        
-        console.log('🎨 [INIT] CSS类已添加 - fade-out:', splashScreen.classList.contains('fade-out'), 'show:', container.classList.contains('show'));
         
         // 等待过渡动画完成后检查空状态和清理
         setTimeout(() => {
             // 检查是否需要显示空状态
             if (!currentFolder || allFiles.length === 0) {
                 if (!currentFolder) {
-                    console.log('📭 [INIT] 显示空状态 - 无文件夹');
                     showEmptyState('请选择一个包含PPT文件的文件夹');
                 } else {
-                    console.log('📭 [INIT] 显示空状态 - 无文件');
                     showEmptyState('该文件夹中没有找到PPT文件');
                 }
-            } else {
-                console.log('✅ [INIT] 有文件，不显示空状态');
             }
             
             // 完全隐藏启动画面
-            console.log('🚪 [INIT] 启动画面完全隐藏');
             splashScreen.style.display = 'none';
-            console.log('🏁 [INIT] 初始化完全结束');
         }, 300);
     }
 }
@@ -257,7 +221,9 @@ function bindEvents() {
     });
     
     // 设置按钮事件
-    settingsBtn.addEventListener('click', showSettingsModal);
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', showSettingsModal);
+    }
     closeSettingsBtn.addEventListener('click', closeSettingsModal);
     selectCachePathBtn.addEventListener('click', selectCachePath);
     selectTagsPathBtn.addEventListener('click', selectTagsPath);
@@ -312,6 +278,10 @@ async function selectFolder() {
     if (folderPath) {
         currentFolder = folderPath;
         currentFolderEl.textContent = folderPath;
+        
+        // 重新加载标签数据，使用新的基础路径
+        tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
+        
         await scanFiles();
     }
 }
@@ -340,26 +310,15 @@ async function scanFiles() {
 
 // 静默扫描文件，不显示加载状态（用于初始化）
 async function scanFilesQuietly() {
-    console.log('🔍 [SCAN] 开始静默扫描文件');
-    
     if (!currentFolder) {
-        console.log('❌ [SCAN] 没有当前文件夹，跳过扫描');
         return;
     }
-    
-    console.log('📂 [SCAN] 扫描文件夹:', currentFolder);
     
     try {
         allFiles = await ipcRenderer.invoke('scan-ppt-files', currentFolder);
         filteredFiles = [...allFiles];
         
-        console.log('📋 [SCAN] 扫描结果 - 文件数量:', allFiles.length);
-        
-        if (allFiles.length === 0) {
-            console.log('📭 [SCAN] 没有找到PPT文件');
-            // 不显示空状态，等启动画面结束后再显示
-        } else {
-            console.log('🎨 [SCAN] 开始静默渲染文件列表');
+        if (allFiles.length > 0) {
             // 静默渲染文件列表
             renderFilesQuietly();
         }
@@ -367,11 +326,8 @@ async function scanFilesQuietly() {
         updateStats();
         updateTagsPanel();
         
-        console.log('✅ [SCAN] 静默扫描和渲染完成');
-        
     } catch (error) {
-        console.error('❌ [SCAN] 扫描文件时出错:', error);
-        // 不显示错误状态，等启动画面结束后再处理
+        console.error('扫描文件时出错:', error);
     }
 }
 
@@ -391,15 +347,10 @@ function renderFiles() {
 
 // 静默渲染文件列表，不改变加载状态（用于初始化）
 function renderFilesQuietly() {
-    console.log('🎨 [RENDER] 开始静默渲染文件列表');
-    
     if (filteredFiles.length === 0) {
-        console.log('📭 [RENDER] 没有文件需要渲染');
         filesListEl.innerHTML = '';
         return;
     }
-    
-    console.log('📄 [RENDER] 渲染文件数量:', filteredFiles.length);
     
     // 设置容器类名
     filesListEl.className = currentViewMode === 'grid' ? 'files-grid' : 'files-list';
@@ -409,8 +360,6 @@ function renderFilesQuietly() {
         const fileCard = currentViewMode === 'grid' ? createFileCard(file) : createListFileCard(file);
         filesListEl.appendChild(fileCard);
     });
-    
-    console.log('✅ [RENDER] 静默渲染完成');
 }
 
 function createFileCard(file) {
@@ -595,7 +544,7 @@ function selectSuggestion(index) {
 }
 
 async function saveTags() {
-    const success = await ipcRenderer.invoke('save-tags', tagsData);
+    const success = await ipcRenderer.invoke('save-tags', tagsData, currentFolder);
     if (success) {
         closeModal();
         renderFiles();
@@ -720,22 +669,14 @@ function hideLoading() {
 }
 
 function showEmptyState(message = '请选择一个包含PPT文件的文件夹') {
-    console.log('📭 [STATE] 显示空状态:', message);
-    
     emptyEl.querySelector('p').textContent = message;
     emptyEl.classList.remove('hidden');
     filesListEl.classList.add('hidden');
     loadingEl.classList.add('hidden');
-    
-    console.log('✅ [STATE] 空状态已显示');
 }
 
 function hideEmptyState() {
-    console.log('🚫 [STATE] 隐藏空状态');
-    
     emptyEl.classList.add('hidden');
-    
-    console.log('✅ [STATE] 空状态已隐藏');
 }
 
 // 预览相关函数
@@ -872,28 +813,23 @@ function openPreviewFile() {
     openFile(currentFile.path);
 }
 
-// 设置模态框函数
-function showSettingsModal() {
-    loadCurrentSettings();
-    settingsModal.classList.remove('hidden');
-}
+// 设置模态框函数已在文件末尾重新定义，此处删除重复定义
 
 function closeSettingsModal() {
     settingsModal.classList.add('hidden');
-    // 重置输入框
-    cachePathInput.value = '';
-    tagsPathInput.value = '';
+    // 重新加载当前设置以恢复原始值
+    loadCurrentSettings();
 }
 
 async function loadCurrentSettings() {
     try {
         const settings = await ipcRenderer.invoke('get-current-settings');
-        currentCachePathEl.textContent = settings.cachePath || '加载失败';
-        currentTagsPathEl.textContent = settings.tagsPath || '加载失败';
+        cachePathInput.value = settings.cachePath || '';
+        tagsPathInput.value = settings.tagsPath || '';
     } catch (error) {
         console.error('加载当前设置失败:', error);
-        currentCachePathEl.textContent = '加载失败';
-        currentTagsPathEl.textContent = '加载失败';
+        cachePathInput.value = '';
+        tagsPathInput.value = '';
     }
 }
 
@@ -925,15 +861,14 @@ async function resetCachePath() {
     try {
         const result = await ipcRenderer.invoke('reset-cache-path');
         if (result.success) {
-            cachePathInput.value = '';
-            currentCachePathEl.textContent = result.path;
-            alert('缓存路径已重置为默认值');
+            cachePathInput.value = result.path;
+            showToast('缓存路径已重置为默认值', 'success');
         } else {
-            alert('重置缓存路径失败');
+            showToast('重置缓存路径失败', 'error');
         }
     } catch (error) {
         console.error('重置缓存路径失败:', error);
-        alert('重置缓存路径失败');
+        showToast('重置缓存路径失败', 'error');
     }
 }
 
@@ -941,15 +876,89 @@ async function resetTagsPath() {
     try {
         const result = await ipcRenderer.invoke('reset-tags-path');
         if (result.success) {
-            tagsPathInput.value = '';
-            currentTagsPathEl.textContent = result.path;
-            alert('标签文件路径已重置为默认值');
+            tagsPathInput.value = result.path;
+            showToast('标签文件路径已重置为默认值', 'success');
         } else {
-            alert('重置标签文件路径失败');
+            showToast('重置标签文件路径失败', 'error');
         }
     } catch (error) {
         console.error('重置标签文件路径失败:', error);
-        alert('重置标签文件路径失败');
+        showToast('重置标签文件路径失败', 'error');
+    }
+}
+
+// 冒泡提示功能
+function showToast(message, type = 'success', duration = 4000) {
+    // 移除现有的toast
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    // 创建toast元素
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    // 根据类型设置图标
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    // 解析消息，支持标题和内容分离
+    let title, content;
+    if (message.includes('\n\n')) {
+        const parts = message.split('\n\n');
+        title = parts[0];
+        content = parts.slice(1).join('\n\n');
+    } else {
+        title = message;
+        content = '';
+    }
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icons[type] || icons.success}</div>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            ${content ? `<div class="toast-message">${content.replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+        <button class="toast-close">&times;</button>
+    `;
+    
+    // 添加到页面
+    document.body.appendChild(toast);
+    
+    // 显示动画
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+    
+    // 关闭按钮事件
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => {
+        hideToast(toast);
+    });
+    
+    // 自动隐藏
+    if (duration > 0) {
+        setTimeout(() => {
+            hideToast(toast);
+        }, duration);
+    }
+    
+    return toast;
+}
+
+function hideToast(toast) {
+    if (toast && toast.parentNode) {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
     }
 }
 
@@ -964,22 +973,26 @@ async function saveSettings() {
         if (result.success) {
             let message = '设置保存成功！';
             
-            if (result.migrated) {
-                message += '\n\n✅ 已自动迁移您的原有数据到新位置';
+            // 只有在缓存路径真正改变且成功迁移时才显示迁移提示
+            if (result.cachePathChanged && result.cacheMigrated) {
+                message += '\n\n已自动迁移您的原有缓存数据到新位置';
             }
             
-            message += '\n\n注意：路径更改将在下次启动应用时生效。';
+            // 只有在路径真正改变时才提示重启
+            if (result.cachePathChanged) {
+                message += '\n\n注意：路径更改将在下次启动应用时生效';
+            }
             
-            alert(message);
+            showToast(message, 'success');
             closeSettingsModal();
             // 重新加载当前设置显示
             loadCurrentSettings();
         } else {
-            alert('保存设置失败: ' + (result.error || '未知错误'));
+            showToast('保存设置失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (error) {
         console.error('保存设置失败:', error);
-        alert('保存设置失败');
+        showToast('保存设置失败', 'error');
     }
 }
 
@@ -1040,3 +1053,193 @@ window.editTags = editTags;
 window.openFile = openFile;
 window.removeTag = removeTag;
 window.previewFile = previewFile;
+
+// 版本检查相关功能
+
+// 版本检查相关元素
+const currentVersionEl = document.getElementById('currentVersion');
+const latestVersionEl = document.getElementById('latestVersion');
+const updateStatusEl = document.getElementById('updateStatus');
+const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+const downloadUpdateBtn = document.getElementById('downloadUpdateBtn');
+const updateDetailsEl = document.getElementById('updateDetails');
+const releaseNotesEl = document.getElementById('releaseNotes');
+const publishTimeEl = document.getElementById('publishTime');
+
+// 初始化版本信息
+async function initVersionInfo() {
+    try {
+        const result = await ipcRenderer.invoke('get-current-version');
+        if (result.success) {
+            currentVersionEl.textContent = result.version;
+        } else {
+            currentVersionEl.textContent = '获取失败';
+        }
+    } catch (error) {
+        console.error('获取当前版本失败:', error);
+        currentVersionEl.textContent = '获取失败';
+    }
+}
+
+// 全局变量存储更新信息
+let updateInfo = null;
+
+// 检查更新
+async function checkForUpdates() {
+    // 更新UI状态
+    updateStatusEl.textContent = '检查中...';
+    updateStatusEl.className = 'update-status checking';
+    checkUpdateBtn.disabled = true;
+    checkUpdateBtn.textContent = '检查中...';
+    downloadUpdateBtn.classList.add('hidden');
+    updateDetailsEl.classList.add('hidden');
+    
+    try {
+        const result = await ipcRenderer.invoke('check-for-updates');
+        
+        if (result.success) {
+            latestVersionEl.textContent = result.latestVersion;
+            updateInfo = result; // 保存更新信息
+            
+            if (result.hasUpdate) {
+                // 有更新可用
+                updateStatusEl.textContent = '有新版本';
+                updateStatusEl.className = 'update-status update-available';
+                downloadUpdateBtn.classList.remove('hidden');
+                
+                // 根据是否有直接下载链接更新按钮文本
+                if (result.installerUrl) {
+                    downloadUpdateBtn.textContent = '自动下载安装';
+                    downloadUpdateBtn.onclick = () => downloadAndInstallUpdate();
+                } else {
+                    downloadUpdateBtn.textContent = '前往下载页面';
+                    downloadUpdateBtn.onclick = () => downloadUpdate(result.downloadUrl);
+                }
+                
+                // 显示更新详情
+                if (result.releaseNotes) {
+                    releaseNotesEl.textContent = result.releaseNotes;
+                    publishTimeEl.textContent = new Date(result.publishedAt).toLocaleString('zh-CN');
+                    updateDetailsEl.classList.remove('hidden');
+                }
+                
+            } else {
+                // 已是最新版本
+                updateStatusEl.textContent = '已是最新';
+                updateStatusEl.className = 'update-status up-to-date';
+            }
+        } else {
+            // 检查失败
+            updateStatusEl.textContent = '检查失败';
+            updateStatusEl.className = 'update-status error';
+            latestVersionEl.textContent = '检查失败';
+            
+            // 显示错误信息
+            showToast('检查更新失败: ' + (result.error || '网络连接错误'), 'error');
+        }
+    } catch (error) {
+        console.error('检查更新失败:', error);
+        updateStatusEl.textContent = '检查失败';
+        updateStatusEl.className = 'update-status error';
+        latestVersionEl.textContent = '检查失败';
+        showToast('检查更新失败: ' + error.message, 'error');
+    } finally {
+        // 恢复按钮状态
+        checkUpdateBtn.disabled = false;
+        checkUpdateBtn.textContent = '检查更新';
+    }
+}
+
+// 下载更新（打开下载页面）
+async function downloadUpdate(downloadUrl) {
+    try {
+        const result = await ipcRenderer.invoke('open-download-page', downloadUrl);
+        if (result.success) {
+            showToast('已打开下载页面', 'info');
+        } else {
+            showToast('打开下载页面失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (error) {
+        console.error('打开下载页面失败:', error);
+        showToast('打开下载页面失败: ' + error.message, 'error');
+    }
+}
+
+// 自动下载并安装更新
+async function downloadAndInstallUpdate() {
+    if (!updateInfo || !updateInfo.installerUrl) {
+        showToast('没有找到可下载的安装包', 'error');
+        return;
+    }
+    
+    try {
+        // 禁用下载按钮
+        downloadUpdateBtn.disabled = true;
+        downloadUpdateBtn.textContent = '准备下载...';
+        
+        // 调用主进程下载并安装
+        const result = await ipcRenderer.invoke('download-and-install-update', updateInfo.installerUrl);
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+        } else {
+            showToast('下载安装失败: ' + (result.error || '未知错误'), 'error');
+            // 恢复按钮状态
+            downloadUpdateBtn.disabled = false;
+            downloadUpdateBtn.textContent = '自动下载安装';
+        }
+    } catch (error) {
+        console.error('下载安装失败:', error);
+        showToast('下载安装失败: ' + error.message, 'error');
+        // 恢复按钮状态
+        downloadUpdateBtn.disabled = false;
+        downloadUpdateBtn.textContent = '自动下载安装';
+    }
+}
+
+// 监听下载进度事件
+ipcRenderer.on('download-progress', (event, progressData) => {
+    const { status, progress, message } = progressData;
+    
+    switch (status) {
+        case 'started':
+            downloadUpdateBtn.textContent = '开始下载...';
+            updateStatusEl.textContent = message;
+            break;
+        case 'downloading':
+            downloadUpdateBtn.textContent = `下载中 ${progress}%`;
+            updateStatusEl.textContent = message;
+            break;
+        case 'completed':
+            downloadUpdateBtn.textContent = '启动安装...';
+            updateStatusEl.textContent = message;
+            break;
+        case 'error':
+            downloadUpdateBtn.textContent = '下载失败';
+            updateStatusEl.textContent = message;
+            showToast(message, 'error');
+            // 恢复按钮状态
+            setTimeout(() => {
+                downloadUpdateBtn.disabled = false;
+                downloadUpdateBtn.textContent = '自动下载安装';
+            }, 3000);
+            break;
+    }
+});
+
+// 修改showSettingsModal函数以包含版本信息初始化和自动检查更新
+function showSettingsModal() {
+    loadCurrentSettings();
+    settingsModal.classList.remove('hidden');
+    // 初始化版本信息
+    initVersionInfo();
+    // 自动检查更新
+    setTimeout(() => {
+        checkForUpdates();
+    }, 500);
+}
+
+// 绑定版本检查事件
+if (checkUpdateBtn) {
+    checkUpdateBtn.addEventListener('click', checkForUpdates);
+}

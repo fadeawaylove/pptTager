@@ -1,6 +1,6 @@
 {
   "name": "ppt-tagger",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A desktop application for managing and tagging PowerPoint files",
   "main": "main.js",
   "scripts": {

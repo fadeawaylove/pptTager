@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const { exec, spawn } = require('child_process');
 const os = require('os');
+const https = require('https');
 
 let mainWindow;
 const DATA_FILE = path.join(app.getPath('userData'), 'ppt-tags.json');
@@ -10,10 +11,20 @@ const SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json');
 
 // 创建主窗口
 function createWindow() {
+  // 根据平台选择合适的图标格式
+  let iconPath;
+  if (process.platform === 'win32') {
+    iconPath = path.join(__dirname, 'assets/icon.ico');
+  } else if (process.platform === 'darwin') {
+    iconPath = path.join(__dirname, 'assets/icon.icns');
+  } else {
+    iconPath = path.join(__dirname, 'assets/icon.png');
+  }
+  
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 1200,
-    icon: path.join(__dirname, 'assets/icon.png'),
+    icon: iconPath,
     show: false, // 防止闪动，等内容加载完成后再显示
     webPreferences: {
       nodeIntegration: true,
@@ -98,12 +109,17 @@ ipcMain.handle('scan-ppt-files', async (event, folderPath) => {
     const pptFiles = files.filter(file => {
       const ext = path.extname(file).toLowerCase();
       return ext === '.ppt' || ext === '.pptx';
-    }).map(file => ({
-      name: file,
-      path: path.join(folderPath, file),
-      size: fs.statSync(path.join(folderPath, file)).size,
-      modified: fs.statSync(path.join(folderPath, file)).mtime
-    }));
+    }).map(file => {
+      const fullPath = path.join(folderPath, file);
+      const relativePath = path.relative(folderPath, fullPath);
+      return {
+        name: file,
+        path: fullPath, // 保持绝对路径用于文件操作
+        relativePath: relativePath, // 新增相对路径字段
+        size: fs.statSync(fullPath).size,
+        modified: fs.statSync(fullPath).mtime
+      };
+    });
     
     return pptFiles;
   } catch (error) {
@@ -113,11 +129,22 @@ ipcMain.handle('scan-ppt-files', async (event, folderPath) => {
 });
 
 // 加载标签数据
-ipcMain.handle('load-tags', async () => {
+ipcMain.handle('load-tags', async (event, baseFolder) => {
   try {
     const tagsFile = getActualTagsPath();
     if (await fs.pathExists(tagsFile)) {
       const data = await fs.readJson(tagsFile);
+      
+      // 如果提供了基础文件夹，将相对路径转换为绝对路径
+      if (baseFolder) {
+        const processedData = {};
+        for (const [relativePath, tags] of Object.entries(data)) {
+          const absolutePath = path.resolve(baseFolder, relativePath);
+          processedData[absolutePath] = tags;
+        }
+        return processedData;
+      }
+      
       return data;
     }
     return {};
@@ -128,12 +155,23 @@ ipcMain.handle('load-tags', async () => {
 });
 
 // 保存标签数据
-ipcMain.handle('save-tags', async (event, tagsData) => {
+ipcMain.handle('save-tags', async (event, tagsData, baseFolder) => {
   try {
     const tagsFile = getActualTagsPath();
+    
+    // 如果提供了基础文件夹，将绝对路径转换为相对路径
+    let processedTagsData = tagsData;
+    if (baseFolder) {
+      processedTagsData = {};
+      for (const [filePath, tags] of Object.entries(tagsData)) {
+        const relativePath = path.relative(baseFolder, filePath);
+        processedTagsData[relativePath] = tags;
+      }
+    }
+    
     // 确保目录存在
     await fs.ensureDir(path.dirname(tagsFile));
-    await fs.writeJson(tagsFile, tagsData, { spaces: 2 });
+    await fs.writeJson(tagsFile, processedTagsData, { spaces: 2 });
     return true;
   } catch (error) {
     console.error('保存标签数据时出错:', error);
@@ -346,6 +384,305 @@ function escapeXml(unsafe) {
   });
 }
 
+// 版本检查相关功能
+
+// 获取当前应用版本
+function getCurrentVersion() {
+  return app.getVersion();
+}
+
+// 比较版本号
+function compareVersions(version1, version2) {
+  const v1parts = version1.split('.').map(Number);
+  const v2parts = version2.split('.').map(Number);
+  
+  const maxLength = Math.max(v1parts.length, v2parts.length);
+  
+  for (let i = 0; i < maxLength; i++) {
+    const v1part = v1parts[i] || 0;
+    const v2part = v2parts[i] || 0;
+    
+    if (v1part < v2part) return -1;
+    if (v1part > v2part) return 1;
+  }
+  
+  return 0;
+}
+
+// 从GitHub检查最新版本
+function checkLatestVersion() {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.github.com',
+      path: '/repos/fadeawaylove/pptTager/releases/latest', // 需要替换为实际的GitHub仓库
+      method: 'GET',
+      headers: {
+        'User-Agent': 'PPT-Tagger-App'
+      }
+    };
+    
+    const req = https.request(options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            const release = JSON.parse(data);
+            
+            // 根据平台选择合适的下载链接
+            let downloadUrl = release.html_url; // 默认使用发布页面链接
+            let installerUrl = null;
+            
+            if (release.assets && release.assets.length > 0) {
+              // 查找适合当前平台的安装包
+              const platform = process.platform;
+              let targetAsset = null;
+              
+              if (platform === 'win32') {
+                // Windows平台查找.exe文件
+                targetAsset = release.assets.find(asset => 
+                  asset.name.toLowerCase().includes('setup') && 
+                  asset.name.toLowerCase().endsWith('.exe')
+                ) || release.assets.find(asset => 
+                  asset.name.toLowerCase().endsWith('.exe')
+                );
+              } else if (platform === 'darwin') {
+                // macOS平台查找.dmg文件
+                targetAsset = release.assets.find(asset => 
+                  asset.name.toLowerCase().endsWith('.dmg')
+                );
+              } else if (platform === 'linux') {
+                // Linux平台查找AppImage文件
+                targetAsset = release.assets.find(asset => 
+                  asset.name.toLowerCase().includes('appimage')
+                );
+              }
+              
+              if (targetAsset) {
+                installerUrl = targetAsset.browser_download_url;
+              }
+            }
+            
+            resolve({
+              version: release.tag_name.replace(/^v/, ''), // 移除v前缀
+              downloadUrl: downloadUrl, // 发布页面链接
+              installerUrl: installerUrl, // 直接下载链接
+              releaseNotes: release.body,
+              publishedAt: release.published_at
+            });
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+          }
+        } catch (error) {
+          reject(new Error('解析响应数据失败: ' + error.message));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(new Error('网络请求失败: ' + error.message));
+    });
+    
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error('请求超时'));
+    });
+    
+    req.end();
+  });
+}
+
+// IPC处理程序：获取当前版本
+ipcMain.handle('get-current-version', async () => {
+  try {
+    return {
+      success: true,
+      version: getCurrentVersion()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// IPC处理程序：检查更新
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const currentVersion = getCurrentVersion();
+    const latestRelease = await checkLatestVersion();
+    const comparison = compareVersions(currentVersion, latestRelease.version);
+    
+    return {
+      success: true,
+      currentVersion,
+      latestVersion: latestRelease.version,
+      hasUpdate: comparison < 0,
+      downloadUrl: latestRelease.downloadUrl,
+      installerUrl: latestRelease.installerUrl,
+      releaseNotes: latestRelease.releaseNotes,
+      publishedAt: latestRelease.publishedAt
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// IPC处理程序：打开下载页面
+ipcMain.handle('open-download-page', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 下载文件函数
+function downloadFile(url, outputPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(outputPath);
+    
+    const request = https.get(url, (response) => {
+      // 处理重定向
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        file.close();
+        fs.unlinkSync(outputPath);
+        return downloadFile(response.headers.location, outputPath, onProgress)
+          .then(resolve)
+          .catch(reject);
+      }
+      
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync(outputPath);
+        return reject(new Error(`下载失败: HTTP ${response.statusCode}`));
+      }
+      
+      const totalSize = parseInt(response.headers['content-length'], 10);
+      let downloadedSize = 0;
+      
+      response.on('data', (chunk) => {
+        downloadedSize += chunk.length;
+        if (onProgress && totalSize) {
+          const progress = Math.round((downloadedSize / totalSize) * 100);
+          onProgress(progress, downloadedSize, totalSize);
+        }
+      });
+      
+      response.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        resolve(outputPath);
+      });
+      
+      file.on('error', (err) => {
+        file.close();
+        fs.unlinkSync(outputPath);
+        reject(err);
+      });
+    });
+    
+    request.on('error', (err) => {
+      file.close();
+      fs.unlinkSync(outputPath);
+      reject(err);
+    });
+    
+    request.setTimeout(30000, () => {
+      request.destroy();
+      file.close();
+      fs.unlinkSync(outputPath);
+      reject(new Error('下载超时'));
+    });
+  });
+}
+
+// IPC处理程序：下载并安装更新
+ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
+  try {
+    if (!installerUrl) {
+      return {
+        success: false,
+        error: '没有找到适合当前平台的安装包'
+      };
+    }
+    
+    // 获取文件名
+    const urlParts = installerUrl.split('/');
+    const fileName = urlParts[urlParts.length - 1];
+    const downloadPath = path.join(os.tmpdir(), fileName);
+    
+    // 发送下载开始事件
+    mainWindow.webContents.send('download-progress', {
+      status: 'started',
+      message: '开始下载更新包...'
+    });
+    
+    // 下载文件
+    await downloadFile(installerUrl, downloadPath, (progress, downloaded, total) => {
+      mainWindow.webContents.send('download-progress', {
+        status: 'downloading',
+        progress: progress,
+        downloaded: downloaded,
+        total: total,
+        message: `下载中... ${progress}%`
+      });
+    });
+    
+    // 下载完成
+    mainWindow.webContents.send('download-progress', {
+      status: 'completed',
+      message: '下载完成，准备安装...'
+    });
+    
+    // 启动安装程序
+    if (process.platform === 'win32') {
+      // Windows: 启动exe安装程序
+      spawn(downloadPath, [], { detached: true, stdio: 'ignore' });
+    } else if (process.platform === 'darwin') {
+      // macOS: 打开dmg文件
+      exec(`open "${downloadPath}"`);
+    } else if (process.platform === 'linux') {
+      // Linux: 使其可执行并运行
+      exec(`chmod +x "${downloadPath}" && "${downloadPath}"`);
+    }
+    
+    // 延迟退出应用程序，给安装程序时间启动
+    setTimeout(() => {
+      app.quit();
+    }, 2000);
+    
+    return {
+      success: true,
+      message: '安装程序已启动，应用程序将自动关闭'
+    };
+    
+  } catch (error) {
+    mainWindow.webContents.send('download-progress', {
+      status: 'error',
+      message: '下载失败: ' + error.message
+    });
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
 // 设置相关的IPC处理程序
 
 // 获取当前设置
@@ -463,67 +800,39 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     }
     
     // 获取当前使用的路径
-    const currentTagsPath = getActualTagsPath();
+    const currentCachePath = getActualCachePath();
+    let cachePathChanged = false;
+    let cacheMigrated = false;
     
-    // 数据迁移逻辑
-    if (newSettings.tagsPath && newSettings.tagsPath !== currentTagsPath) {
-      console.log('检测到标签文件路径更改，开始数据迁移...');
+    // 缓存目录迁移逻辑（只有路径真正改变时才迁移）
+    if (newSettings.cachePath && newSettings.cachePath !== currentCachePath) {
+      cachePathChanged = true;
+      console.log('检测到缓存路径更改，开始缓存迁移...');
       
-      // 检查原文件是否存在
-      if (await fs.pathExists(currentTagsPath)) {
+      // 检查原缓存目录是否存在
+      if (await fs.pathExists(currentCachePath)) {
         try {
-          // 读取原有数据
-          const oldData = await fs.readJson(currentTagsPath);
+          // 确保新缓存目录存在
+          await fs.ensureDir(newSettings.cachePath);
           
-          // 确保新路径的目录存在
-          await fs.ensureDir(path.dirname(newSettings.tagsPath));
+          // 复制所有缓存文件
+          const files = await fs.readdir(currentCachePath);
+          for (const file of files) {
+            const srcFile = path.join(currentCachePath, file);
+            const destFile = path.join(newSettings.cachePath, file);
+            
+            if ((await fs.stat(srcFile)).isFile()) {
+              await fs.copy(srcFile, destFile);
+            }
+          }
           
-          // 将数据写入新位置
-          await fs.writeJson(newSettings.tagsPath, oldData, { spaces: 2 });
-          
-          console.log('标签数据迁移成功:', currentTagsPath, '->', newSettings.tagsPath);
+          cacheMigrated = true;
+          console.log('缓存文件迁移成功:', currentCachePath, '->', newSettings.cachePath);
         } catch (migrationError) {
-          console.error('数据迁移失败:', migrationError);
-          return {
-            success: false,
-            error: `数据迁移失败: ${migrationError.message}`
-          };
+          console.warn('缓存迁移失败，但不影响功能:', migrationError.message);
         }
       } else {
-        console.log('原标签文件不存在，跳过数据迁移');
-      }
-    }
-    
-    // 缓存目录迁移逻辑
-    if (newSettings.cachePath) {
-      const currentCachePath = getActualCachePath();
-      if (newSettings.cachePath !== currentCachePath) {
-        console.log('检测到缓存路径更改，开始缓存迁移...');
-        
-        // 检查原缓存目录是否存在
-        if (await fs.pathExists(currentCachePath)) {
-          try {
-            // 确保新缓存目录存在
-            await fs.ensureDir(newSettings.cachePath);
-            
-            // 复制所有缓存文件
-            const files = await fs.readdir(currentCachePath);
-            for (const file of files) {
-              const srcFile = path.join(currentCachePath, file);
-              const destFile = path.join(newSettings.cachePath, file);
-              
-              if ((await fs.stat(srcFile)).isFile()) {
-                await fs.copy(srcFile, destFile);
-              }
-            }
-            
-            console.log('缓存文件迁移成功:', currentCachePath, '->', newSettings.cachePath);
-          } catch (migrationError) {
-            console.warn('缓存迁移失败，但不影响功能:', migrationError.message);
-          }
-        } else {
-          console.log('原缓存目录不存在，跳过缓存迁移');
-        }
+        console.log('原缓存目录不存在，跳过缓存迁移');
       }
     }
     
@@ -540,7 +849,8 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     
     return {
       success: true,
-      migrated: true
+      cachePathChanged,
+      cacheMigrated
     };
   } catch (error) {
     console.error('保存设置失败:', error);
