@@ -32,6 +32,11 @@ const helpBtn = document.getElementById('helpBtn');
 const helpModal = document.getElementById('helpModal');
 const closeHelpBtn = document.getElementById('closeHelp');
 
+// 更新检查相关元素
+const updateBtn = document.getElementById('updateBtn');
+const updateModal = document.getElementById('updateModal');
+const closeUpdateBtn = document.getElementById('closeUpdate');
+
 // 设置相关元素
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
@@ -101,6 +106,11 @@ async function init() {
         // 5. 更新统计信息和标签面板
         updateStats();
         updateTagsPanel();
+        
+        // 6. 应用启动时自动检查更新（静默检查）
+        setTimeout(() => {
+            checkForUpdatesQuietly();
+        }, 1000);
         
         // 计算总耗时
         const totalTime = Date.now() - startTime;
@@ -239,6 +249,17 @@ function bindEvents() {
         }
     });
     
+    // 更新检查按钮事件
+    updateBtn.addEventListener('click', showUpdateModal);
+    closeUpdateBtn.addEventListener('click', closeUpdateModal);
+    
+    // 点击更新检查模态框外部关闭
+    updateModal.addEventListener('click', (e) => {
+        if (e.target === updateModal) {
+            closeUpdateModal();
+        }
+    });
+    
     // 设置按钮事件
     if (settingsBtn) {
         settingsBtn.addEventListener('click', showSettingsModal);
@@ -279,6 +300,10 @@ function bindEvents() {
         } else if (helpModal && !helpModal.classList.contains('hidden')) {
             if (e.key === 'Escape') {
                 closeHelpModal();
+            }
+        } else if (updateModal && !updateModal.classList.contains('hidden')) {
+            if (e.key === 'Escape') {
+                closeUpdateModal();
             }
         } else if (settingsModal && !settingsModal.classList.contains('hidden')) {
             if (e.key === 'Escape') {
@@ -753,23 +778,34 @@ async function showPreview() {
         previewLoading.classList.add('hidden');
     }
     
-    // 更新导航按钮状态
-    prevBtn.disabled = currentPreviewIndex === 0;
-    nextBtn.disabled = currentPreviewIndex === previewFiles.length - 1;
+    // 更新导航按钮状态（循环模式下始终可用，除非只有一张图片）
+    const hasMultipleFiles = previewFiles.length > 1;
+    prevBtn.disabled = !hasMultipleFiles;
+    nextBtn.disabled = !hasMultipleFiles;
 }
 
 function showPrevPreview() {
-    if (currentPreviewIndex > 0) {
+    if (previewFiles.length <= 1) return;
+    
+    // 循环切换：如果是第一张，跳到最后一张
+    if (currentPreviewIndex === 0) {
+        currentPreviewIndex = previewFiles.length - 1;
+    } else {
         currentPreviewIndex--;
-        showPreview();
     }
+    showPreview();
 }
 
 function showNextPreview() {
-    if (currentPreviewIndex < previewFiles.length - 1) {
+    if (previewFiles.length <= 1) return;
+    
+    // 循环切换：如果是最后一张，跳到第一张
+    if (currentPreviewIndex === previewFiles.length - 1) {
+        currentPreviewIndex = 0;
+    } else {
         currentPreviewIndex++;
-        showPreview();
     }
+    showPreview();
 }
 
 function closePreviewModal() {
@@ -786,6 +822,17 @@ function showHelpModal() {
 
 function closeHelpModal() {
     helpModal.classList.add('hidden');
+}
+
+// 更新检查模态框函数
+function showUpdateModal() {
+    updateModal.classList.remove('hidden');
+    // 初始化版本信息
+    initVersionInfo();
+}
+
+function closeUpdateModal() {
+    updateModal.classList.add('hidden');
 }
 
 // 预览页面标签相关函数
@@ -1075,15 +1122,15 @@ window.previewFile = previewFile;
 
 // 版本检查相关功能
 
-// 版本检查相关元素
-const currentVersionEl = document.getElementById('currentVersion');
-const latestVersionEl = document.getElementById('latestVersion');
-const updateStatusEl = document.getElementById('updateStatus');
-const checkUpdateBtn = document.getElementById('checkUpdateBtn');
-const downloadUpdateBtn = document.getElementById('downloadUpdateBtn');
-const updateDetailsEl = document.getElementById('updateDetails');
-const releaseNotesEl = document.getElementById('releaseNotes');
-const publishTimeEl = document.getElementById('publishTime');
+// 版本检查相关元素（更新检查模态框）
+const currentVersionEl = document.getElementById('currentVersionUpdate');
+const latestVersionEl = document.getElementById('latestVersionUpdate');
+const updateStatusEl = document.getElementById('updateStatusUpdate');
+const checkUpdateBtn = document.getElementById('checkUpdateBtnUpdate');
+const downloadUpdateBtn = document.getElementById('downloadUpdateBtnUpdate');
+const updateDetailsEl = document.getElementById('updateDetailsUpdate');
+const releaseNotesEl = document.getElementById('releaseNotesUpdate');
+const publishTimeEl = document.getElementById('publishTimeUpdate');
 
 // 初始化版本信息
 async function initVersionInfo() {
@@ -1246,16 +1293,25 @@ ipcRenderer.on('download-progress', (event, progressData) => {
     }
 });
 
-// 修改showSettingsModal函数以包含版本信息初始化和自动检查更新
+// 设置模态框函数
 function showSettingsModal() {
     loadCurrentSettings();
     settingsModal.classList.remove('hidden');
-    // 初始化版本信息
-    initVersionInfo();
-    // 自动检查更新
-    setTimeout(() => {
-        checkForUpdates();
-    }, 500);
+}
+
+// 静默检查更新（应用启动时使用，不更新UI状态）
+async function checkForUpdatesQuietly() {
+    try {
+        const result = await ipcRenderer.invoke('check-for-updates');
+        
+        if (result.success && result.hasUpdate) {
+            // 如果有更新，显示一个简单的提示
+            showToast(`发现新版本 v${result.latestVersion}，点击"检查更新"按钮查看详情`, 'info', 8000);
+        }
+    } catch (error) {
+        // 静默失败，不显示错误信息
+        console.log('静默检查更新失败:', error);
+    }
 }
 
 // 绑定版本检查事件

@@ -58,6 +58,7 @@
                             </svg>
                         </button>
                     </div>
+                    <button id="updateBtn" class="btn btn-secondary">检查更新</button>
                     <button id="settingsBtn" class="btn btn-secondary">设置</button>
                     <button id="helpBtn" class="btn btn-help">帮助</button>
                 </div>
@@ -275,6 +276,46 @@
         </div>
     </div>
 
+    <!-- 更新检查模态框 -->
+    <div id="updateModal" class="modal update-modal hidden">
+        <div class="update-content">
+            <div class="update-header">
+                <h2>检查更新</h2>
+                <button id="closeUpdate" class="close-btn">&times;</button>
+            </div>
+            <div class="update-body">
+                <div class="update-section">
+                    <h3>🔄 版本信息</h3>
+                    <div class="version-info">
+                        <div class="version-item">
+                            <strong>当前版本:</strong>
+                            <span id="currentVersionUpdate" class="version-display">加载中...</span>
+                        </div>
+                        <div class="version-item">
+                            <strong>最新版本:</strong>
+                            <span id="latestVersionUpdate" class="version-display">未检查</span>
+                        </div>
+                        <div class="version-item">
+                            <strong>更新状态:</strong>
+                            <span id="updateStatusUpdate" class="update-status">未检查</span>
+                        </div>
+                    </div>
+                    <div class="version-actions">
+                        <button id="checkUpdateBtnUpdate" class="btn btn-primary btn-small">检查更新</button>
+                        <button id="downloadUpdateBtnUpdate" class="btn btn-success btn-small hidden">下载更新</button>
+                    </div>
+                    <div id="updateDetailsUpdate" class="update-details hidden">
+                        <h4>更新说明:</h4>
+                        <div id="releaseNotesUpdate" class="release-notes"></div>
+                        <div class="update-time">
+                            <small>发布时间: <span id="publishTimeUpdate"></span></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 设置模态框 -->
     <div id="settingsModal" class="modal settings-modal hidden">
         <div class="settings-content">
@@ -307,34 +348,7 @@
                     </div>
                 </div>
                 
-                <div class="settings-section">
-                    <h3>🔄 版本信息</h3>
-                    <div class="version-info">
-                        <div class="version-item">
-                            <strong>当前版本:</strong>
-                            <span id="currentVersion" class="version-display">加载中...</span>
-                        </div>
-                        <div class="version-item">
-                            <strong>最新版本:</strong>
-                            <span id="latestVersion" class="version-display">未检查</span>
-                        </div>
-                        <div class="version-item">
-                            <strong>更新状态:</strong>
-                            <span id="updateStatus" class="update-status">未检查</span>
-                        </div>
-                    </div>
-                    <div class="version-actions">
-                        <button id="checkUpdateBtn" class="btn btn-primary btn-small">检查更新</button>
-                        <button id="downloadUpdateBtn" class="btn btn-success btn-small hidden">下载更新</button>
-                    </div>
-                    <div id="updateDetails" class="update-details hidden">
-                        <h4>更新说明:</h4>
-                        <div id="releaseNotes" class="release-notes"></div>
-                        <div class="update-time">
-                            <small>发布时间: <span id="publishTime"></span></small>
-                        </div>
-                    </div>
-                </div>
+
             </div>
             <div class="settings-footer">
                 <button id="saveSettings" class="btn btn-primary">保存设置</button>

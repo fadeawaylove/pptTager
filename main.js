@@ -44,6 +44,26 @@ function createWindow() {
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
   }
+
+  // 处理窗口关闭事件，显示确认弹框
+  mainWindow.on('close', async (event) => {
+    event.preventDefault();
+    
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      buttons: ['确定退出', '取消'],
+      defaultId: 1,
+      title: '确认退出',
+      message: '确定要退出PPT标签管理器吗？',
+      detail: '退出后将关闭应用程序。'
+    });
+    
+    if (choice.response === 0) {
+      // 用户选择确定退出
+      mainWindow.destroy();
+    }
+    // 如果用户选择取消，什么都不做，窗口保持打开
+  });
 }
 
 // 应用准备就绪时创建窗口

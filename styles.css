@@ -952,6 +952,73 @@ body {
     transform: translateY(-1px);
 }
 
+/* 更新检查模态框样式 */
+.update-modal {
+    z-index: 1002;
+}
+
+.update-content {
+    background: white;
+    border-radius: 15px;
+    width: 90vw;
+    max-width: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.update-header {
+    padding: 25px 30px;
+    border-bottom: 2px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px 15px 0 0;
+}
+
+.update-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 300;
+}
+
+.update-header .close-btn {
+    color: white;
+    font-size: 28px;
+    width: 35px;
+    height: 35px;
+}
+
+.update-header .close-btn:hover {
+    color: #f0f0f0;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 50%;
+}
+
+.update-body {
+    padding: 30px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.update-section {
+    margin-bottom: 30px;
+}
+
+.update-section h3 {
+    color: #333;
+    font-size: 18px;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* 帮助模态框样式 */
 .help-modal {
     z-index: 1001;
