@@ -1,4 +1,5 @@
 const { ipcRenderer } = require('electron');
+const path = require('path');
 
 // 全局变量
 let currentFolder = null;
@@ -485,6 +486,7 @@ function createFileCard(file) {
         <div class="file-actions">
             <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\\/g, '\\\\')}')">预览</button>
             <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\\/g, '\\\\')}')">编辑标签</button>
+            <button class="btn btn-small btn-move" onclick="moveFile('${file.path.replace(/\\/g, '\\\\')}')">移动文件</button>
             <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\\/g, '\\\\')}')">打开文件</button>
         </div>
     `;
@@ -681,6 +683,71 @@ async function openFile(filePath) {
     const success = await ipcRenderer.invoke('open-file', filePath);
     if (!success) {
         alert('打开文件失败');
+    }
+}
+
+// 移动文件功能
+async function moveFile(filePath) {
+    try {
+        const file = allFiles.find(f => f.path === filePath);
+        if (!file) {
+            alert('文件信息不存在');
+            return;
+        }
+        
+        // 选择目标文件夹
+        const folderResult = await ipcRenderer.invoke('select-target-folder');
+        if (!folderResult.success) {
+            if (folderResult.error !== '用户取消选择') {
+                alert('选择目标文件夹失败: ' + folderResult.error);
+            }
+            return;
+        }
+        
+        const targetFolder = folderResult.folderPath;
+        const fileName = path.basename(filePath);
+        const targetPath = path.join(targetFolder, fileName);
+        
+        // 确认移动操作
+        const confirmMessage = `确定要将文件移动到以下位置吗？\n\n源文件：${filePath}\n目标位置：${targetPath}`;
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        // 显示加载状态
+        showLoading('正在移动文件...');
+        
+        // 执行文件移动
+        const moveResult = await ipcRenderer.invoke('move-file', filePath, targetPath);
+        
+        hideLoading();
+        
+        if (moveResult.success) {
+            // 移动成功，更新文件列表
+            const fileIndex = allFiles.findIndex(f => f.path === filePath);
+            if (fileIndex !== -1) {
+                // 更新文件路径
+                allFiles[fileIndex].path = moveResult.newPath;
+                
+                // 更新标签数据中的路径
+                if (tagsData[filePath]) {
+                    tagsData[moveResult.newPath] = tagsData[filePath];
+                    delete tagsData[filePath];
+                }
+                
+                // 重新渲染文件列表
+                renderFiles();
+                updateStats();
+                
+                showToast(`文件已成功移动到：${targetFolder}`, 'success');
+            }
+        } else {
+            alert('移动文件失败: ' + moveResult.error);
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('移动文件时出错:', error);
+        alert('移动文件失败: ' + error.message);
     }
 }
 

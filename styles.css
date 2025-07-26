@@ -620,6 +620,15 @@ body {
     background-color: #7B1FA2;
 }
 
+.btn-move {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.btn-move:hover {
+    background-color: #45a049;
+}
+
 /* 模态框样式 */
 .modal {
     position: fixed;

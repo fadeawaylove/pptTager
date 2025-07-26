@@ -330,6 +330,64 @@ ipcMain.handle('open-file', async (event, filePath) => {
   }
 });
 
+// 移动文件并更新标签数据
+ipcMain.handle('move-file', async (event, sourcePath, targetPath) => {
+  try {
+    // 检查源文件是否存在
+    if (!await fs.pathExists(sourcePath)) {
+      return { success: false, error: '源文件不存在' };
+    }
+    
+    // 检查目标路径是否已存在
+    if (await fs.pathExists(targetPath)) {
+      return { success: false, error: '目标路径已存在文件' };
+    }
+    
+    // 确保目标目录存在
+    await fs.ensureDir(path.dirname(targetPath));
+    
+    // 移动文件
+    await fs.move(sourcePath, targetPath);
+    
+    // 更新标签数据中的路径映射
+    const smartTagsData = await loadSmartTags();
+    
+    // 如果源路径在pathToHash中，更新为新路径
+    if (smartTagsData.pathToHash[sourcePath]) {
+      const fileHash = smartTagsData.pathToHash[sourcePath];
+      delete smartTagsData.pathToHash[sourcePath];
+      smartTagsData.pathToHash[targetPath] = fileHash;
+      
+      // 保存更新后的标签数据
+      await saveSmartTags(smartTagsData);
+    }
+    
+    return { success: true, newPath: targetPath };
+  } catch (error) {
+    console.error('移动文件时出错:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 选择目标文件夹
+ipcMain.handle('select-target-folder', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: '选择目标文件夹'
+    });
+    
+    if (!result.canceled && result.filePaths.length > 0) {
+      return { success: true, folderPath: result.filePaths[0] };
+    }
+    
+    return { success: false, error: '用户取消选择' };
+  } catch (error) {
+    console.error('选择目标文件夹时出错:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // 获取PPT预览
 ipcMain.handle('get-ppt-preview', async (event, filePath) => {
   try {
