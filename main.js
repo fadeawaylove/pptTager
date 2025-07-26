@@ -200,28 +200,53 @@ ipcMain.handle('select-folder', async () => {
   return null;
 });
 
+// 递归扫描PPT文件
+async function scanPPTFilesRecursively(folderPath, basePath = folderPath) {
+  let pptFiles = [];
+  
+  try {
+    const items = await fs.readdir(folderPath, { withFileTypes: true });
+    
+    for (const item of items) {
+      const fullPath = path.join(folderPath, item.name);
+      
+      if (item.isDirectory()) {
+        // 递归扫描子文件夹
+        const subFiles = await scanPPTFilesRecursively(fullPath, basePath);
+        pptFiles = pptFiles.concat(subFiles);
+      } else if (item.isFile()) {
+        const ext = path.extname(item.name).toLowerCase();
+        if (ext === '.ppt' || ext === '.pptx') {
+          try {
+            const stats = await fs.stat(fullPath);
+            // 过滤掉小于1KB的PPT文件
+            if (stats.size >= 1024) {
+              const relativePath = path.relative(basePath, fullPath);
+              pptFiles.push({
+                name: item.name,
+                path: fullPath, // 保持绝对路径用于文件操作
+                relativePath: relativePath, // 相对路径字段
+                size: stats.size,
+                modified: stats.mtime
+              });
+            }
+          } catch (statError) {
+            console.error('获取文件信息时出错:', fullPath, statError);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('扫描文件夹时出错:', folderPath, error);
+  }
+  
+  return pptFiles;
+}
+
 // 扫描PPT文件
 ipcMain.handle('scan-ppt-files', async (event, folderPath) => {
   try {
-    const files = await fs.readdir(folderPath);
-    const pptFiles = files.filter(file => {
-      const ext = path.extname(file).toLowerCase();
-      return ext === '.ppt' || ext === '.pptx';
-    }).map(file => {
-      const fullPath = path.join(folderPath, file);
-      const relativePath = path.relative(folderPath, fullPath);
-      return {
-        name: file,
-        path: fullPath, // 保持绝对路径用于文件操作
-        relativePath: relativePath, // 新增相对路径字段
-        size: fs.statSync(fullPath).size,
-        modified: fs.statSync(fullPath).mtime
-      };
-    }).filter(file => {
-      // 过滤掉小于1KB的PPT文件
-      return file.size >= 1024;
-    });
-    
+    const pptFiles = await scanPPTFilesRecursively(folderPath);
     return pptFiles;
   } catch (error) {
     console.error('扫描PPT文件时出错:', error);
