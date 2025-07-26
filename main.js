@@ -350,16 +350,33 @@ ipcMain.handle('move-file', async (event, sourcePath, targetPath) => {
     await fs.move(sourcePath, targetPath);
     
     // 更新标签数据中的路径映射
-    const smartTagsData = await loadSmartTags();
-    
-    // 如果源路径在pathToHash中，更新为新路径
-    if (smartTagsData.pathToHash[sourcePath]) {
-      const fileHash = smartTagsData.pathToHash[sourcePath];
-      delete smartTagsData.pathToHash[sourcePath];
-      smartTagsData.pathToHash[targetPath] = fileHash;
-      
-      // 保存更新后的标签数据
-      await saveSmartTags(smartTagsData);
+    try {
+      const tagsFile = getActualTagsPath();
+      if (await fs.pathExists(tagsFile)) {
+        const tagsData = await fs.readJson(tagsFile);
+        
+        // 查找并更新路径
+        let updated = false;
+        const newTagsData = {};
+        
+        for (const [filePath, tags] of Object.entries(tagsData)) {
+          if (filePath === sourcePath) {
+            // 更新为新路径
+            newTagsData[targetPath] = tags;
+            updated = true;
+          } else {
+            newTagsData[filePath] = tags;
+          }
+        }
+        
+        // 如果有更新，保存标签数据
+        if (updated) {
+          await fs.writeJson(tagsFile, newTagsData, { spaces: 2 });
+        }
+      }
+    } catch (tagError) {
+      console.error('更新标签数据时出错:', tagError);
+      // 不影响文件移动的成功
     }
     
     return { success: true, newPath: targetPath };
