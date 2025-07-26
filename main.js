@@ -66,9 +66,29 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
-  // 开发模式下打开开发者工具
+  // 开发模式下打开开发者工具和热更新
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
+    
+    // 添加热更新功能
+    if (process.argv.includes('--watch')) {
+      const chokidar = require('fs').watch || require('fs').watchFile;
+      const filesToWatch = ['index.html', 'styles.css', 'renderer.js'];
+      
+      filesToWatch.forEach(file => {
+        const filePath = path.join(__dirname, file);
+        try {
+          fs.watchFile(filePath, { interval: 1000 }, () => {
+            console.log(`文件 ${file} 已更改，重新加载页面...`);
+            mainWindow.reload();
+          });
+        } catch (error) {
+          console.log(`无法监听文件 ${file}:`, error);
+        }
+      });
+      
+      console.log('热更新已启用，监听文件变化...');
+    }
   }
   
   // 创建菜单以支持F12快捷键

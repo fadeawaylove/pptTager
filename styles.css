@@ -852,13 +852,35 @@ body {
     color: white;
 }
 
+/* 信息区域容器 */
+.preview-info-container {
+    flex-shrink: 0;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    border-radius: 10px 10px 0 0;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+/* 图片展示区域容器 */
+.preview-image-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: #000;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+}
+
 .preview-header {
     padding: 12px 20px;
-    border-bottom: 1px solid #333;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-shrink: 0;
+    min-height: 60px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .preview-info-line {
@@ -867,6 +889,7 @@ body {
     gap: 15px;
     flex: 1;
     min-width: 0;
+    overflow: hidden;
 }
 
 .preview-filename {
@@ -874,7 +897,7 @@ body {
     font-size: 16px;
     font-weight: 600;
     color: white;
-    max-width: 150px;
+    max-width: 200px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -887,6 +910,7 @@ body {
     gap: 8px;
     flex: 1;
     min-width: 0;
+    overflow: hidden;
 }
 
 .preview-tags-inline .preview-tags-label {
@@ -898,9 +922,10 @@ body {
 
 .preview-tags-inline .preview-tags-list {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
     min-width: 0;
+    overflow: hidden;
 }
 
 .preview-counter {
@@ -959,6 +984,8 @@ body {
     position: relative;
     overflow: hidden;
     min-height: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .preview-content-area {
@@ -968,59 +995,64 @@ body {
     justify-content: center;
     position: relative;
     overflow: hidden;
-    padding: 10px 80px;
+    padding: 10px 20px;
 }
 
 .nav-arrow {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(102, 126, 234, 0.3);
-    color: white;
+    background: rgba(0, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.6);
     border: none;
-    width: 60px;
-    height: 60px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
-    font-size: 28px;
+    font-size: 20px;
     font-weight: bold;
     cursor: pointer;
-    z-index: 5;
+    z-index: 15;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(5px);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    opacity: 0.7;
+    backdrop-filter: blur(2px);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    opacity: 0.3;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .nav-arrow:hover:not(:disabled) {
-    background: rgba(102, 126, 234, 0.6);
+    background: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.9);
     transform: translateY(-50%) scale(1.1);
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    opacity: 1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0.8;
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .nav-arrow:disabled {
-    background: rgba(51, 51, 51, 0.6);
-    color: #666;
+    background: rgba(0, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.3);
     cursor: not-allowed;
     transform: translateY(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .nav-arrow:disabled:hover {
     transform: translateY(-50%);
-    background: rgba(51, 51, 51, 0.3);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     opacity: 0.3;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .nav-arrow-left {
-    left: 10px;
+    left: 20px;
 }
 
 .nav-arrow-right {
-    right: 10px;
+    right: 20px;
 }
 
 .preview-image {

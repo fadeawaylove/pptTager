@@ -125,31 +125,37 @@
     <!-- PPT预览模态框 -->
     <div id="previewModal" class="modal preview-modal hidden">
         <div class="preview-content">
-            <div class="preview-header">
-                <div class="preview-info-line">
-                    <h3 id="previewFileName" class="preview-filename" title="">文件名</h3>
-                    <div class="preview-tags-inline">
-                        <span class="preview-tags-label">标签:</span>
-                        <div id="previewTags" class="preview-tags-list"></div>
+            <!-- 信息区域容器 -->
+            <div class="preview-info-container">
+                <div class="preview-header">
+                    <div class="preview-info-line">
+                        <h3 id="previewFileName" class="preview-filename" title="">文件名</h3>
+                        <div class="preview-tags-inline">
+                            <span class="preview-tags-label">标签:</span>
+                            <div id="previewTags" class="preview-tags-list"></div>
+                        </div>
+                        <span id="previewCounter" class="preview-counter">1 / 1</span>
                     </div>
-                    <span id="previewCounter" class="preview-counter">1 / 1</span>
-                </div>
-                <div class="preview-actions">
-                    <button id="openPreviewFile" class="btn btn-secondary btn-small">打开文件</button>
-                    <button id="editPreviewTags" class="btn btn-primary btn-small">编辑标签</button>
-                    <button id="closePreview" class="close-btn">&times;</button>
+                    <div class="preview-actions">
+                        <button id="openPreviewFile" class="btn btn-secondary btn-small">打开文件</button>
+                        <button id="editPreviewTags" class="btn btn-primary btn-small">编辑标签</button>
+                        <button id="closePreview" class="close-btn">&times;</button>
+                    </div>
                 </div>
             </div>
-            <div class="preview-body">
-                <button id="prevBtn" class="nav-arrow nav-arrow-left" title="上一个">‹</button>
-                <div class="preview-content-area">
-                    <div id="previewLoading" class="preview-loading hidden">
-                        <div class="loading-spinner"></div>
-                        <p>正在生成预览...</p>
+            <!-- 图片展示区域容器 -->
+            <div class="preview-image-container">
+                <div class="preview-body">
+                    <button id="prevBtn" class="nav-arrow nav-arrow-left" title="上一个">‹</button>
+                    <div class="preview-content-area">
+                        <div id="previewLoading" class="preview-loading hidden">
+                            <div class="loading-spinner"></div>
+                            <p>正在生成预览...</p>
+                        </div>
+                        <img id="previewImage" class="preview-image" alt="PPT预览" />
                     </div>
-                    <img id="previewImage" class="preview-image" alt="PPT预览" />
+                    <button id="nextBtn" class="nav-arrow nav-arrow-right" title="下一个">›</button>
                 </div>
-                <button id="nextBtn" class="nav-arrow nav-arrow-right" title="下一个">›</button>
             </div>
         </div>
     </div>
