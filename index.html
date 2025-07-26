@@ -94,7 +94,10 @@
                             </svg>
                         </button>
                     </div>
-                    <button id="updateBtn" class="btn btn-secondary px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full font-medium transition-all duration-300">检查更新</button>
+                    <button id="updateBtn" class="btn btn-secondary px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full font-medium transition-all duration-300">
+                        <span>检查更新</span>
+                        <span id="updateBtnVersion" class="text-xs opacity-75 ml-1">v1.6.9</span>
+                    </button>
                     <button id="settingsBtn" class="btn btn-secondary px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full font-medium transition-all duration-300">设置</button>
                     <button id="helpBtn" class="btn btn-help px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full font-medium transition-all duration-300">帮助</button>
                 </div>
@@ -354,14 +357,16 @@
                             <strong>最新版本:</strong>
                             <span id="latestVersionUpdate" class="version-display">未检查</span>
                         </div>
-                        <div class="version-item">
-                            <strong>更新状态:</strong>
-                            <span id="updateStatusUpdate" class="update-status">未检查</span>
-                        </div>
                     </div>
                     <div class="version-actions">
                         <button id="checkUpdateBtnUpdate" class="btn btn-primary btn-small">检查更新</button>
                         <button id="downloadUpdateBtnUpdate" class="btn btn-success btn-small hidden">下载更新</button>
+                        <div id="downloadProgressContainer" class="download-progress-container hidden">
+                            <div class="progress-bar">
+                                <div id="downloadProgressBar" class="progress-fill"></div>
+                            </div>
+                            <span id="downloadProgressText" class="progress-text">0%</span>
+                        </div>
                     </div>
                     <div id="updateDetailsUpdate" class="update-details hidden">
                         <h4>更新说明:</h4>

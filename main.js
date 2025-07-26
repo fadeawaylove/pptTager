@@ -217,6 +217,9 @@ ipcMain.handle('scan-ppt-files', async (event, folderPath) => {
         size: fs.statSync(fullPath).size,
         modified: fs.statSync(fullPath).mtime
       };
+    }).filter(file => {
+      // 过滤掉小于1KB的PPT文件
+      return file.size >= 1024;
     });
     
     return pptFiles;

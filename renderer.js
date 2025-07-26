@@ -133,7 +133,10 @@ async function init() {
         updateStats();
         updateTagsPanel();
         
-        // 6. 首次打开应用时在后台自动检查更新（静默检查）
+        // 6. 初始化主页更新按钮的版本号显示
+        await initMainPageVersionDisplay();
+        
+        // 7. 首次打开应用时在后台自动检查更新（静默检查）
         // 延迟执行，确保不影响启动性能，并确保网络连接稳定后再检查
         setTimeout(() => {
             console.log('开始静默检查更新...');
@@ -1313,6 +1316,28 @@ async function initVersionInfo() {
     }
 }
 
+// 初始化主页更新按钮的版本号显示
+async function initMainPageVersionDisplay() {
+    try {
+        const result = await ipcRenderer.invoke('get-current-version');
+        const updateBtn = document.getElementById('updateBtn');
+        const versionSpan = updateBtn ? updateBtn.querySelector('.version-display') : null;
+        
+        if (result.success && versionSpan) {
+            versionSpan.textContent = result.version;
+        } else if (versionSpan) {
+            versionSpan.textContent = 'v1.6.9';
+        }
+    } catch (error) {
+        console.error('获取主页版本号失败:', error);
+        const updateBtn = document.getElementById('updateBtn');
+        const versionSpan = updateBtn ? updateBtn.querySelector('.version-display') : null;
+        if (versionSpan) {
+            versionSpan.textContent = 'v1.6.9';
+        }
+    }
+}
+
 // 全局变量存储更新信息
 let updateInfo = null;
 // 全局变量跟踪下载状态
@@ -1327,12 +1352,16 @@ async function checkForUpdates() {
     }
     
     // 更新UI状态
-    updateStatusEl.textContent = '检查中...';
-    updateStatusEl.className = 'update-status checking';
     checkUpdateBtn.disabled = true;
     checkUpdateBtn.textContent = '检查中...';
     downloadUpdateBtn.classList.add('hidden');
     updateDetailsEl.classList.add('hidden');
+    
+    // 隐藏下载进度条
+    const progressContainer = document.getElementById('downloadProgressContainer');
+    if (progressContainer) {
+        progressContainer.style.display = 'none';
+    }
     
     try {
         const result = await ipcRenderer.invoke('check-for-updates');
@@ -1343,8 +1372,6 @@ async function checkForUpdates() {
             
             if (result.hasUpdate) {
                 // 有更新可用
-                updateStatusEl.textContent = '有新版本';
-                updateStatusEl.className = 'update-status update-available';
                 downloadUpdateBtn.classList.remove('hidden');
                 
                 // 根据是否有直接下载链接更新按钮文本
@@ -1365,13 +1392,10 @@ async function checkForUpdates() {
                 
             } else {
                 // 已是最新版本
-                updateStatusEl.textContent = '已是最新';
-                updateStatusEl.className = 'update-status up-to-date';
+                showToast('当前已是最新版本', 'info');
             }
         } else {
             // 检查失败
-            updateStatusEl.textContent = '检查失败';
-            updateStatusEl.className = 'update-status error';
             latestVersionEl.textContent = '检查失败';
             
             // 显示错误信息，特别处理GitHub API限制错误
@@ -1384,8 +1408,6 @@ async function checkForUpdates() {
         }
     } catch (error) {
         console.error('检查更新失败:', error);
-        updateStatusEl.textContent = '检查失败';
-        updateStatusEl.className = 'update-status error';
         latestVersionEl.textContent = '检查失败';
         
         // 特别处理GitHub API限制错误
@@ -1476,11 +1498,24 @@ async function downloadAndInstallUpdate() {
 // 监听下载进度事件
 ipcRenderer.on('download-progress', (event, progressData) => {
     const { status, progress, message } = progressData;
+    const progressContainer = document.getElementById('downloadProgressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
     
     switch (status) {
         case 'started':
-            downloadUpdateBtn.textContent = '开始下载...';
-            updateStatusEl.textContent = message;
+            downloadUpdateBtn.textContent = '下载中';
+            checkUpdateBtn.textContent = '下载中';
+            // 显示下载进度条
+            if (progressContainer) {
+                progressContainer.style.display = 'flex';
+            }
+            if (progressFill) {
+                progressFill.style.width = '0%';
+            }
+            if (progressText) {
+                progressText.textContent = '0%';
+            }
             // 确保按钮保持禁用状态
             downloadUpdateBtn.disabled = true;
             if (checkUpdateBtn) {
@@ -1488,8 +1523,15 @@ ipcRenderer.on('download-progress', (event, progressData) => {
             }
             break;
         case 'downloading':
-            downloadUpdateBtn.textContent = `下载中 ${progress}%`;
-            updateStatusEl.textContent = message;
+            downloadUpdateBtn.textContent = '下载中';
+            checkUpdateBtn.textContent = '下载中';
+            // 更新下载进度条
+            if (progressFill) {
+                progressFill.style.width = `${progress}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `${progress}%`;
+            }
             // 确保按钮保持禁用状态
             downloadUpdateBtn.disabled = true;
             if (checkUpdateBtn) {
@@ -1498,7 +1540,14 @@ ipcRenderer.on('download-progress', (event, progressData) => {
             break;
         case 'completed':
             downloadUpdateBtn.textContent = '启动安装...';
-            updateStatusEl.textContent = message;
+            checkUpdateBtn.textContent = '启动安装...';
+            // 进度条显示100%
+            if (progressFill) {
+                progressFill.style.width = '100%';
+            }
+            if (progressText) {
+                progressText.textContent = '100%';
+            }
             // 下载完成，即将退出应用，保持按钮禁用
             downloadUpdateBtn.disabled = true;
             if (checkUpdateBtn) {
@@ -1507,8 +1556,12 @@ ipcRenderer.on('download-progress', (event, progressData) => {
             break;
         case 'error':
             downloadUpdateBtn.textContent = '下载失败';
-            updateStatusEl.textContent = message;
+            checkUpdateBtn.textContent = '检查更新';
             showToast(message, 'error');
+            // 隐藏下载进度条
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+            }
             // 重置下载状态和恢复按钮状态
             isDownloading = false;
             setTimeout(async () => {
@@ -1574,29 +1627,13 @@ async function checkForUpdatesQuietly() {
                 // 如果有更新，在检查更新按钮上添加new标识
                 addNewBadgeToUpdateButton();
                 
-                // 更新UI状态
-                if (updateStatusEl) {
-                    updateStatusEl.textContent = '有新版本';
-                    updateStatusEl.className = 'update-status update-available';
-                }
-                
                 // 显示一个简单的提示
                 showToast(`发现新版本 v${result.latestVersion}，点击"检查更新"按钮查看详情`, 'info', 8000);
             } else {
                 console.log('已是最新版本');
-                // 更新UI状态为最新版本
-                if (updateStatusEl) {
-                    updateStatusEl.textContent = '已是最新';
-                    updateStatusEl.className = 'update-status up-to-date';
-                }
             }
         } else {
             console.log('检查更新失败:', result.error);
-            // 更新UI状态为检查失败
-            if (updateStatusEl) {
-                updateStatusEl.textContent = '检查失败';
-                updateStatusEl.className = 'update-status error';
-            }
             if (latestVersionEl) {
                 latestVersionEl.textContent = '检查失败';
             }
@@ -1610,11 +1647,6 @@ async function checkForUpdatesQuietly() {
     } catch (error) {
         // 静默失败，不显示错误信息
         console.log('静默检查更新失败:', error);
-        // 更新UI状态为检查失败
-        if (updateStatusEl) {
-            updateStatusEl.textContent = '检查失败';
-            updateStatusEl.className = 'update-status error';
-        }
         if (latestVersionEl) {
             latestVersionEl.textContent = '检查失败';
         }
