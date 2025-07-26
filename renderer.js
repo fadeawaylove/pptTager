@@ -1318,22 +1318,30 @@ async function initVersionInfo() {
 
 // 初始化主页更新按钮的版本号显示
 async function initMainPageVersionDisplay() {
+    console.log('开始初始化主页版本号显示...');
     try {
         const result = await ipcRenderer.invoke('get-current-version');
+        console.log('IPC调用结果:', result);
         const updateBtn = document.getElementById('updateBtn');
-        const versionSpan = updateBtn ? updateBtn.querySelector('.version-display') : null;
+        const versionSpan = document.getElementById('updateBtnVersion');
+        console.log('找到的元素:', { updateBtn: !!updateBtn, versionSpan: !!versionSpan });
         
         if (result.success && versionSpan) {
+            console.log('设置版本号为:', result.version);
             versionSpan.textContent = result.version;
         } else if (versionSpan) {
-            versionSpan.textContent = 'v1.6.9';
+            console.log('使用默认版本号: v1.6.10');
+            versionSpan.textContent = 'v1.6.10';
+        } else {
+            console.log('未找到版本显示元素');
         }
     } catch (error) {
         console.error('获取主页版本号失败:', error);
         const updateBtn = document.getElementById('updateBtn');
-        const versionSpan = updateBtn ? updateBtn.querySelector('.version-display') : null;
+        const versionSpan = document.getElementById('updateBtnVersion');
         if (versionSpan) {
-            versionSpan.textContent = 'v1.6.9';
+            console.log('异常情况下使用默认版本号: v1.6.10');
+            versionSpan.textContent = 'v1.6.10';
         }
     }
 }
@@ -1495,9 +1503,18 @@ async function downloadAndInstallUpdate() {
     }
 }
 
+// 格式化文件大小
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 // 监听下载进度事件
 ipcRenderer.on('download-progress', (event, progressData) => {
-    const { status, progress, message } = progressData;
+    const { status, progress, message, downloaded, total } = progressData;
     const progressContainer = document.getElementById('downloadProgressContainer');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
@@ -1505,7 +1522,6 @@ ipcRenderer.on('download-progress', (event, progressData) => {
     switch (status) {
         case 'started':
             downloadUpdateBtn.textContent = '下载中';
-            checkUpdateBtn.textContent = '下载中';
             // 显示下载进度条
             if (progressContainer) {
                 progressContainer.style.display = 'flex';
@@ -1524,13 +1540,16 @@ ipcRenderer.on('download-progress', (event, progressData) => {
             break;
         case 'downloading':
             downloadUpdateBtn.textContent = '下载中';
-            checkUpdateBtn.textContent = '下载中';
             // 更新下载进度条
             if (progressFill) {
                 progressFill.style.width = `${progress}%`;
             }
             if (progressText) {
-                progressText.textContent = `${progress}%`;
+                if (downloaded && total) {
+                    progressText.textContent = `${progress}% (${formatFileSize(downloaded)}/${formatFileSize(total)})`;
+                } else {
+                    progressText.textContent = `${progress}%`;
+                }
             }
             // 确保按钮保持禁用状态
             downloadUpdateBtn.disabled = true;
@@ -1540,13 +1559,16 @@ ipcRenderer.on('download-progress', (event, progressData) => {
             break;
         case 'completed':
             downloadUpdateBtn.textContent = '启动安装...';
-            checkUpdateBtn.textContent = '启动安装...';
             // 进度条显示100%
             if (progressFill) {
                 progressFill.style.width = '100%';
             }
             if (progressText) {
-                progressText.textContent = '100%';
+                if (total) {
+                    progressText.textContent = `100% (${formatFileSize(total)}/${formatFileSize(total)})`;
+                } else {
+                    progressText.textContent = '100%';
+                }
             }
             // 下载完成，即将退出应用，保持按钮禁用
             downloadUpdateBtn.disabled = true;
@@ -1556,7 +1578,6 @@ ipcRenderer.on('download-progress', (event, progressData) => {
             break;
         case 'error':
             downloadUpdateBtn.textContent = '下载失败';
-            checkUpdateBtn.textContent = '检查更新';
             showToast(message, 'error');
             // 隐藏下载进度条
             if (progressContainer) {
