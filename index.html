@@ -170,10 +170,12 @@
 
     <!-- PPT预览模态框 -->
     <div id="previewModal" class="modal preview-modal hidden">
-        <div class="preview-content">
-            <!-- 信息区域容器 - 使用Tailwind CSS固定高度和布局 -->
-            <div class="flex-shrink-0 bg-gray-900 border-b border-gray-700 rounded-t-lg mb-2 overflow-hidden">
-                <div class="px-5 py-3 flex justify-between items-center min-h-[60px] w-full">
+        <!-- 模态框主容器：固定尺寸，flex垂直布局 -->
+        <div class="bg-gray-800 rounded-lg w-[95vw] h-[95vh] max-w-none flex flex-col text-white">
+            
+            <!-- Header区域：固定高度，不会被遮挡 -->
+            <header class="flex-shrink-0 bg-gray-900 border-b border-gray-700 rounded-t-lg px-5 py-3">
+                <div class="flex justify-between items-center min-h-[60px] w-full">
                     <div class="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
                         <h3 id="previewFileName" class="text-white text-base font-semibold max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis flex-shrink-0" title="">文件名</h3>
                         <div class="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
@@ -188,21 +190,25 @@
                         <button id="closePreview" class="text-gray-300 hover:text-white text-2xl w-8 h-8 flex items-center justify-center">&times;</button>
                     </div>
                 </div>
-            </div>
-            <!-- 图片展示区域容器 - 使用Tailwind CSS确保正确的flex布局 -->
-            <div class="flex-1 flex flex-col min-h-0 bg-black rounded-b-lg overflow-hidden">
-                <div class="flex-1 flex items-center relative overflow-hidden min-h-0 w-full h-full">
-                    <button id="prevBtn" class="absolute left-5 top-1/2 -translate-y-1/2 bg-black/20 text-white/60 border-0 w-11 h-11 rounded-full text-xl font-bold cursor-pointer z-[15] transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-lg opacity-30 border border-white/10 hover:bg-black/50 hover:text-white/90 hover:scale-110 hover:opacity-80 hover:border-white/30 disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="上一个">‹</button>
-                    <div class="flex-1 flex items-center justify-center relative overflow-hidden px-5 py-2.5">
-                        <div id="previewLoading" class="preview-loading hidden">
-                            <div class="loading-spinner"></div>
-                            <p>正在生成预览...</p>
-                        </div>
-                        <img id="previewImage" class="max-w-full max-h-full w-auto h-auto object-contain rounded shadow-2xl" alt="PPT预览" />
+            </header>
+            
+            <!-- Body区域：占据剩余空间，图片在此区域内撑满但不溢出 -->
+            <main class="flex-1 bg-black rounded-b-lg relative overflow-hidden min-h-0">
+                <!-- 导航按钮：绝对定位在body内 -->
+                <button id="prevBtn" class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/20 text-white/60 border-0 w-11 h-11 rounded-full text-xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-lg opacity-30 border border-white/10 hover:bg-black/50 hover:text-white/90 hover:scale-110 hover:opacity-80 hover:border-white/30 disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="上一个">‹</button>
+                
+                <!-- 图片容器：在body内居中显示，确保不溢出 -->
+                <div class="w-full h-full flex items-center justify-center p-4">
+                    <div id="previewLoading" class="preview-loading hidden flex flex-col items-center gap-5 text-gray-400">
+                        <div class="loading-spinner"></div>
+                        <p>正在生成预览...</p>
                     </div>
-                    <button id="nextBtn" class="absolute right-5 top-1/2 -translate-y-1/2 bg-black/20 text-white/60 border-0 w-11 h-11 rounded-full text-xl font-bold cursor-pointer z-[15] transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-lg opacity-30 border border-white/10 hover:bg-black/50 hover:text-white/90 hover:scale-110 hover:opacity-80 hover:border-white/30 disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="下一个">›</button>
+                    <img id="previewImage" class="max-w-full max-h-full w-auto h-auto object-contain rounded shadow-2xl" alt="PPT预览" />
                 </div>
-            </div>
+                
+                <button id="nextBtn" class="absolute right-4 top-1/2 -translate-y-1/2 bg-black/20 text-white/60 border-0 w-11 h-11 rounded-full text-xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-lg opacity-30 border border-white/10 hover:bg-black/50 hover:text-white/90 hover:scale-110 hover:opacity-80 hover:border-white/30 disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="下一个">›</button>
+            </main>
+            
         </div>
     </div>
 
