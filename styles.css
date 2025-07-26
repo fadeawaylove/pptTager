@@ -1569,47 +1569,7 @@ body {
     font-weight: 500;
 }
 
-/* 工作文件夹信息样式 */
-.working-directory-info {
-    margin-top: 15px;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    border-left: 4px solid #007bff;
-}
-
-.working-directory-info small {
-    color: #666;
-    font-weight: 500;
-    display: block;
-    margin-bottom: 10px;
-}
-
-.folder-stats {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-}
-
-.folder-stats span {
-    background-color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #e0e0e0;
-    font-size: 12px;
-    color: #333;
-    font-weight: 500;
-    min-width: 100px;
-    text-align: center;
-}
-
-.folder-stats span:first-child {
-    border-left: 3px solid #28a745;
-}
-
-.folder-stats span:last-child {
-    border-left: 3px solid #007bff;
-}
+/* 工作文件夹信息样式 - 文件统计相关样式已移除 */
 
 .current-paths {
     background-color: #f8f9fa;

@@ -47,9 +47,8 @@ const selectDataDirectoryBtn = document.getElementById('selectDataDirectory');
 const resetDataDirectoryBtn = document.getElementById('resetDataDirectory');
 const workingDirectoryInput = document.getElementById('workingDirectoryInput');
 const selectWorkingDirectoryBtn = document.getElementById('selectWorkingDirectory');
-const refreshWorkingDirectoryBtn = document.getElementById('refreshWorkingDirectory');
-const folderFileCountEl = document.getElementById('folderFileCount');
-const folderPptCountEl = document.getElementById('folderPptCount');
+const refreshFilesBtn = document.getElementById('refreshFiles');
+// 文件统计相关元素已移除
 const saveSettingsBtn = document.getElementById('saveSettings');
 const cancelSettingsBtn = document.getElementById('cancelSettings');
 
@@ -324,9 +323,9 @@ function bindEvents() {
     if (selectWorkingDirectoryBtn) {
         selectWorkingDirectoryBtn.addEventListener('click', selectWorkingDirectoryFromSettings);
     }
-    if (refreshWorkingDirectoryBtn) {
-        refreshWorkingDirectoryBtn.addEventListener('click', refreshWorkingDirectoryFromSettings);
-    }
+    if (refreshFilesBtn) {
+    refreshFilesBtn.addEventListener('click', refreshFilesFromMainPage);
+}
     saveSettingsBtn.addEventListener('click', saveSettings);
     cancelSettingsBtn.addEventListener('click', closeSettingsModal);
     
@@ -1023,7 +1022,6 @@ async function loadCurrentSettings() {
         // 加载工作文件夹设置
         if (workingDirectoryInput) {
             workingDirectoryInput.value = currentFolder || '';
-            await updateFolderStats();
         }
     } catch (error) {
         console.error('加载当前设置失败:', error);
@@ -1067,7 +1065,6 @@ async function selectWorkingDirectoryFromSettings() {
         const folderPath = await ipcRenderer.invoke('select-folder');
         if (folderPath && workingDirectoryInput) {
             workingDirectoryInput.value = folderPath;
-            await updateFolderStats(folderPath);
         }
     } catch (error) {
         console.error('选择工作文件夹失败:', error);
@@ -1075,53 +1072,23 @@ async function selectWorkingDirectoryFromSettings() {
     }
 }
 
-// 从设置中刷新工作文件夹
-async function refreshWorkingDirectoryFromSettings() {
+// 从主页刷新文件列表
+async function refreshFilesFromMainPage() {
     try {
-        const folderPath = workingDirectoryInput ? workingDirectoryInput.value.trim() : '';
-        if (folderPath) {
-            await updateFolderStats(folderPath);
-            showToast('文件夹统计已刷新', 'success');
+        if (currentFolder) {
+            showToast('正在刷新文件列表...', 'info', 2000);
+            await scanFiles();
+            showToast('文件列表已刷新', 'success');
         } else {
-            showToast('请先选择工作文件夹', 'warning');
+            showToast('请先在设置中选择工作文件夹', 'warning');
         }
     } catch (error) {
-        console.error('刷新工作文件夹失败:', error);
-        showToast('刷新工作文件夹失败', 'error');
+        console.error('刷新文件列表失败:', error);
+        showToast('刷新文件列表失败', 'error');
     }
 }
 
-// 更新文件夹统计信息
-async function updateFolderStats(folderPath = null) {
-    try {
-        const targetFolder = folderPath || (workingDirectoryInput ? workingDirectoryInput.value.trim() : '') || currentFolder;
-        
-        if (!targetFolder) {
-            if (folderFileCountEl) folderFileCountEl.textContent = '文件数: 0';
-            if (folderPptCountEl) folderPptCountEl.textContent = 'PPT文件: 0';
-            return;
-        }
-        
-        // 扫描文件夹获取统计信息
-        const files = await ipcRenderer.invoke('scan-ppt-files', targetFolder);
-        const totalFiles = files.length;
-        const pptFiles = files.filter(file => 
-            file.name.toLowerCase().endsWith('.ppt') || 
-            file.name.toLowerCase().endsWith('.pptx')
-        ).length;
-        
-        if (folderFileCountEl) {
-            folderFileCountEl.textContent = `文件数: ${totalFiles}`;
-        }
-        if (folderPptCountEl) {
-            folderPptCountEl.textContent = `PPT文件: ${pptFiles}`;
-        }
-    } catch (error) {
-        console.error('更新文件夹统计失败:', error);
-        if (folderFileCountEl) folderFileCountEl.textContent = '文件数: 错误';
-        if (folderPptCountEl) folderPptCountEl.textContent = 'PPT文件: 错误';
-    }
-}
+// updateFolderStats函数已移除，文件统计功能已从设置页面中删除
 
 // 冒泡提示功能
 function showToast(message, type = 'success', duration = 4000) {

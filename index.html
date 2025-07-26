@@ -68,6 +68,7 @@
                     <div class="search-container flex gap-2 items-center">
                         <input type="text" id="searchInput" placeholder="搜索PPT文件或标签..." class="px-3 py-2 border-0 rounded-full w-72 text-sm outline-none focus:ring-2 focus:ring-white/30 bg-white/90 text-gray-800 placeholder-gray-500">
                         <button id="clearSearch" class="btn btn-secondary px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full font-medium transition-all duration-300">清除</button>
+                        <button id="refreshFiles" class="btn btn-secondary px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full font-medium transition-all duration-300" title="刷新文件列表">🔄 刷新</button>
                     </div>
                 </div>
                 <div class="controls-right flex items-center gap-4">
@@ -405,16 +406,9 @@
                         <div class="path-input-group">
                             <input type="text" id="workingDirectoryInput" class="path-input" placeholder="选择包含PPT文件的文件夹" readonly>
                             <button id="selectWorkingDirectory" class="btn btn-primary btn-small">选择文件夹</button>
-                            <button id="refreshWorkingDirectory" class="btn btn-secondary btn-small">刷新</button>
+
                         </div>
                         <p class="setting-description">选择包含PPT文件的工作文件夹，软件将扫描此文件夹中的所有PPT文件并为其提供标签管理功能。</p>
-                        <div class="working-directory-info">
-                            <small>📊 文件夹统计：</small>
-                            <div class="folder-stats">
-                                <span id="folderFileCount">文件数: 0</span>
-                                <span id="folderPptCount">PPT文件: 0</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 
