@@ -20,6 +20,9 @@ body {
     color: #333;
     overflow-x: hidden;
     font-size: 1rem; /* 使用相对单位 */
+    height: 100vh;
+    margin: 0;
+    padding: 0;
 }
 
 /* 启动画面样式 */
@@ -139,14 +142,14 @@ body {
 }
 
 /* 主容器初始隐藏 */
-.container {
+.app-container {
     height: 100vh;
     display: flex;
     flex-direction: column;
     transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
 }
 
-.container.show {
+.app-container.show {
     opacity: 1 !important;
     visibility: visible !important;
 }
@@ -352,31 +355,32 @@ body {
     gap: 5px;
 }
 
+/* 标签项样式 - 兼容CDN版本 */
 .tag-item {
-    background-color: #e3f2fd;
-    color: #1976d2;
+    background-color: #eff6ff;
+    color: #1d4ed8;
     padding: 6px 12px;
-    border-radius: 16px;
-    font-size: calc(0.75rem * var(--scale-factor));
+    border-radius: 9999px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
     border: 2px solid transparent;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .tag-item:hover {
-    background-color: #bbdefb;
-    transform: scale(1.08);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    border-color: #1976d2;
+    background-color: #dbeafe;
+    transform: scale(1.05);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-color: #93c5fd;
 }
 
 .tag-item.active {
-    background-color: #1976d2;
+    background-color: #2563eb;
     color: white;
-    border-color: #0d47a1;
-    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+    border-color: #1e40af;
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
     transform: scale(1.05);
 }
 
@@ -398,12 +402,12 @@ body {
 }
 
 /* 确保在启动画面期间内容区域完全隐藏 */
-.container:not(.show) {
+.app-container:not(.show) {
     opacity: 0 !important;
     visibility: hidden !important;
 }
 
-.container.show {
+.app-container.show {
     opacity: 1 !important;
     visibility: visible !important;
     transition: opacity 0.3s ease-in-out;
@@ -1563,6 +1567,48 @@ body {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 11px;
     font-weight: 500;
+}
+
+/* 工作文件夹信息样式 */
+.working-directory-info {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+}
+
+.working-directory-info small {
+    color: #666;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.folder-stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.folder-stats span {
+    background-color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #333;
+    font-weight: 500;
+    min-width: 100px;
+    text-align: center;
+}
+
+.folder-stats span:first-child {
+    border-left: 3px solid #28a745;
+}
+
+.folder-stats span:last-child {
+    border-left: 3px solid #007bff;
 }
 
 .current-paths {

@@ -14,8 +14,8 @@ let currentSuggestionIndex = -1;
 let availableTags = [];
 
 // DOM元素
-const selectFolderBtn = document.getElementById('selectFolder');
-const currentFolderEl = document.getElementById('currentFolder');
+// selectFolderBtn已移除，选择文件夹功能已移至设置中
+// currentFolderEl已移除，当前文件夹展示已移至设置中
 const filesListEl = document.getElementById('filesList');
 const loadingEl = document.getElementById('loadingMessage');
 const emptyEl = document.getElementById('emptyMessage');
@@ -45,6 +45,11 @@ const closeSettingsBtn = document.getElementById('closeSettings');
 const dataDirectoryInput = document.getElementById('dataDirectoryInput');
 const selectDataDirectoryBtn = document.getElementById('selectDataDirectory');
 const resetDataDirectoryBtn = document.getElementById('resetDataDirectory');
+const workingDirectoryInput = document.getElementById('workingDirectoryInput');
+const selectWorkingDirectoryBtn = document.getElementById('selectWorkingDirectory');
+const refreshWorkingDirectoryBtn = document.getElementById('refreshWorkingDirectory');
+const folderFileCountEl = document.getElementById('folderFileCount');
+const folderPptCountEl = document.getElementById('folderPptCount');
 const saveSettingsBtn = document.getElementById('saveSettings');
 const cancelSettingsBtn = document.getElementById('cancelSettings');
 
@@ -103,7 +108,7 @@ init();
 async function init() {
     // 显示启动画面，隐藏主界面
     const splashScreen = document.getElementById('splashScreen');
-    const container = document.querySelector('.container');
+    const container = document.querySelector('.app-container');
     
     // 记录启动时间
     const startTime = Date.now();
@@ -121,7 +126,7 @@ async function init() {
         // 4. 如果有上次选择的文件夹，扫描文件
         if (lastFolder) {
             currentFolder = lastFolder;
-            currentFolderEl.textContent = lastFolder;
+            // currentFolderEl已移除，当前文件夹展示已移至设置中
             await scanFilesQuietly();
         }
         
@@ -182,16 +187,7 @@ async function init() {
 }
 
 function bindEvents() {
-    // 选择文件夹
-    selectFolderBtn.addEventListener('click', selectFolder);
-    
-    // 刷新文件夹
-    const refreshFolderBtn = document.getElementById('refreshFolder');
-    refreshFolderBtn.addEventListener('click', async () => {
-        if (currentFolder) {
-            await scanFiles();
-        }
-    });
+    // 选择文件夹功能已移至设置中
     
     // 搜索
     searchInput.addEventListener('input', handleSearch);
@@ -325,6 +321,12 @@ function bindEvents() {
     closeSettingsBtn.addEventListener('click', closeSettingsModal);
     selectDataDirectoryBtn.addEventListener('click', selectDataDirectory);
     resetDataDirectoryBtn.addEventListener('click', resetDataDirectory);
+    if (selectWorkingDirectoryBtn) {
+        selectWorkingDirectoryBtn.addEventListener('click', selectWorkingDirectoryFromSettings);
+    }
+    if (refreshWorkingDirectoryBtn) {
+        refreshWorkingDirectoryBtn.addEventListener('click', refreshWorkingDirectoryFromSettings);
+    }
     saveSettingsBtn.addEventListener('click', saveSettings);
     cancelSettingsBtn.addEventListener('click', closeSettingsModal);
     
@@ -377,7 +379,7 @@ async function selectFolder() {
     const folderPath = await ipcRenderer.invoke('select-folder');
     if (folderPath) {
         currentFolder = folderPath;
-        currentFolderEl.textContent = folderPath;
+        // currentFolderEl已移除，当前文件夹展示已移至设置中
         
         // 重新加载标签数据，使用新的基础路径
         tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
@@ -967,11 +969,11 @@ function updatePreviewTags(file) {
     previewTagsEl.innerHTML = '';
     
     if (fileTags.length === 0) {
-        previewTagsEl.innerHTML = '<span style="color: #999; font-style: italic;">暂无标签</span>';
+        previewTagsEl.innerHTML = '<span class="text-gray-400 text-sm italic">暂无标签</span>';
     } else {
         fileTags.forEach(tag => {
             const tagEl = document.createElement('span');
-            tagEl.className = 'tag';
+            tagEl.className = 'bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium border border-blue-400 transition-all hover:bg-blue-400 hover:border-blue-300 hover:scale-105 cursor-pointer whitespace-nowrap';
             tagEl.textContent = tag;
             previewTagsEl.appendChild(tagEl);
         });
@@ -1017,9 +1019,18 @@ async function loadCurrentSettings() {
     try {
         const settings = await ipcRenderer.invoke('get-current-settings');
         dataDirectoryInput.value = settings.dataDirectory || '';
+        
+        // 加载工作文件夹设置
+        if (workingDirectoryInput) {
+            workingDirectoryInput.value = currentFolder || '';
+            await updateFolderStats();
+        }
     } catch (error) {
         console.error('加载当前设置失败:', error);
         dataDirectoryInput.value = '';
+        if (workingDirectoryInput) {
+            workingDirectoryInput.value = '';
+        }
     }
 }
 
@@ -1047,6 +1058,68 @@ async function resetDataDirectory() {
     } catch (error) {
         console.error('重置数据目录失败:', error);
         showToast('重置数据目录失败', 'error');
+    }
+}
+
+// 从设置中选择工作文件夹
+async function selectWorkingDirectoryFromSettings() {
+    try {
+        const folderPath = await ipcRenderer.invoke('select-folder');
+        if (folderPath && workingDirectoryInput) {
+            workingDirectoryInput.value = folderPath;
+            await updateFolderStats(folderPath);
+        }
+    } catch (error) {
+        console.error('选择工作文件夹失败:', error);
+        showToast('选择工作文件夹失败', 'error');
+    }
+}
+
+// 从设置中刷新工作文件夹
+async function refreshWorkingDirectoryFromSettings() {
+    try {
+        const folderPath = workingDirectoryInput ? workingDirectoryInput.value.trim() : '';
+        if (folderPath) {
+            await updateFolderStats(folderPath);
+            showToast('文件夹统计已刷新', 'success');
+        } else {
+            showToast('请先选择工作文件夹', 'warning');
+        }
+    } catch (error) {
+        console.error('刷新工作文件夹失败:', error);
+        showToast('刷新工作文件夹失败', 'error');
+    }
+}
+
+// 更新文件夹统计信息
+async function updateFolderStats(folderPath = null) {
+    try {
+        const targetFolder = folderPath || (workingDirectoryInput ? workingDirectoryInput.value.trim() : '') || currentFolder;
+        
+        if (!targetFolder) {
+            if (folderFileCountEl) folderFileCountEl.textContent = '文件数: 0';
+            if (folderPptCountEl) folderPptCountEl.textContent = 'PPT文件: 0';
+            return;
+        }
+        
+        // 扫描文件夹获取统计信息
+        const files = await ipcRenderer.invoke('scan-ppt-files', targetFolder);
+        const totalFiles = files.length;
+        const pptFiles = files.filter(file => 
+            file.name.toLowerCase().endsWith('.ppt') || 
+            file.name.toLowerCase().endsWith('.pptx')
+        ).length;
+        
+        if (folderFileCountEl) {
+            folderFileCountEl.textContent = `文件数: ${totalFiles}`;
+        }
+        if (folderPptCountEl) {
+            folderPptCountEl.textContent = `PPT文件: ${pptFiles}`;
+        }
+    } catch (error) {
+        console.error('更新文件夹统计失败:', error);
+        if (folderFileCountEl) folderFileCountEl.textContent = '文件数: 错误';
+        if (folderPptCountEl) folderPptCountEl.textContent = 'PPT文件: 错误';
     }
 }
 
@@ -1131,6 +1204,10 @@ async function saveSettings() {
             dataDirectory: dataDirectoryInput.value.trim() || null
         };
         
+        // 检查工作文件夹是否有变化
+        const newWorkingDirectory = workingDirectoryInput ? workingDirectoryInput.value.trim() : '';
+        const workingDirectoryChanged = newWorkingDirectory !== currentFolder;
+        
         const result = await ipcRenderer.invoke('save-settings', settings);
         if (result.success) {
             let message = '设置保存成功！';
@@ -1144,6 +1221,20 @@ async function saveSettings() {
             if (result.dataDirectoryChanged) {
                 message += '\n\n注意：路径更改将在下次启动应用时生效';
             }
+            
+            // 如果工作文件夹有变化，应用新的文件夹
+             if (workingDirectoryChanged && newWorkingDirectory) {
+                 currentFolder = newWorkingDirectory;
+                 // currentFolderEl已移除，当前文件夹展示已移至设置中
+                 
+                 // 重新加载标签数据
+                 tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
+                 
+                 // 重新扫描文件
+                 await scanFiles();
+                 
+                 message += '\n\n工作文件夹已更新';
+             }
             
             showToast(message, 'success');
             closeSettingsModal();
