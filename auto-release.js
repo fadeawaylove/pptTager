@@ -3,6 +3,7 @@
 const fs = require('fs');
 const { execSync } = require('child_process');
 const path = require('path');
+const readline = require('readline');
 
 // 颜色输出
 const colors = {
@@ -93,8 +94,45 @@ function generateReleaseNotes(commits) {
     return releaseNotes;
 }
 
+// 获取用户输入的发布说明
+function getUserReleaseNotes() {
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+        
+        const notes = [];
+        
+        console.log('\n请输入发布说明（每行一个要点，输入空行结束）:');
+        console.log('提示：可以输入多行，每行描述一个更新内容');
+        console.log('例如：修复预览页面布局问题');
+        console.log('     优化用户界面体验');
+        console.log('');
+        
+        function askForNote() {
+            rl.question(`${notes.length + 1}. `, (answer) => {
+                if (answer.trim() === '') {
+                    rl.close();
+                    if (notes.length === 0) {
+                        warning('未输入发布说明，将使用自动生成的说明');
+                        resolve(null);
+                    } else {
+                        resolve(notes);
+                    }
+                } else {
+                    notes.push(answer.trim());
+                    askForNote();
+                }
+            });
+        }
+        
+        askForNote();
+    });
+}
+
 // 主函数
-function main() {
+async function main() {
     colorLog('🚀 PPT标签管理器全自动发布脚本', 'yellow');
     colorLog('=====================================', 'yellow');
 
@@ -122,15 +160,35 @@ function main() {
     const newVersion = `${versionParts[0]}.${versionParts[1]}.${versionParts[2] + 1}`;
     info(`新版本号: ${newVersion}`);
 
-    // 获取最近的提交记录并生成发布说明
-    info('分析最近的提交记录...');
-    const recentCommits = getRecentCommits(10);
-    const releaseNotes = generateReleaseNotes(recentCommits);
+    // 获取发布说明
+    let releaseNotes;
     
-    info('自动生成的发布说明:');
-    releaseNotes.forEach(note => console.log(`  - ${note}`));
+    // 检查是否有命令行参数传入的发布说明
+    const args = process.argv.slice(2);
+    if (args.length > 0) {
+        // 使用命令行参数作为发布说明
+        releaseNotes = args;
+        info('使用提供的发布说明:');
+        releaseNotes.forEach(note => console.log(`  - ${note}`));
+    } else {
+        // 交互式输入发布说明
+        const userNotes = await getUserReleaseNotes();
+        
+        if (userNotes && userNotes.length > 0) {
+            releaseNotes = userNotes;
+            info('使用用户输入的发布说明:');
+            releaseNotes.forEach(note => console.log(`  - ${note}`));
+        } else {
+            // 自动生成发布说明
+            info('分析最近的提交记录...');
+            const recentCommits = getRecentCommits(10);
+            releaseNotes = generateReleaseNotes(recentCommits);
+            info('使用自动生成的发布说明:');
+            releaseNotes.forEach(note => console.log(`  - ${note}`));
+        }
+    }
+    
     console.log('');
-
     info('开始自动发布流程...');
 
     // 1. 更新package.json版本号
@@ -207,8 +265,10 @@ function main() {
 }
 
 // 运行主函数
-try {
-    main();
-} catch (err) {
-    error(err.message);
-}
+(async () => {
+    try {
+        await main();
+    } catch (err) {
+        error(err.message);
+    }
+})();
