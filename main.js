@@ -331,7 +331,7 @@ ipcMain.handle('open-file', async (event, filePath) => {
 });
 
 // 移动文件并更新标签数据
-ipcMain.handle('move-file', async (event, sourcePath, targetPath) => {
+ipcMain.handle('move-file', async (event, sourcePath, targetPath, baseFolder) => {
   try {
     // 检查源文件是否存在
     if (!await fs.pathExists(sourcePath)) {
@@ -355,14 +355,23 @@ ipcMain.handle('move-file', async (event, sourcePath, targetPath) => {
       if (await fs.pathExists(tagsFile)) {
         const tagsData = await fs.readJson(tagsFile);
         
+        // 如果提供了基础文件夹，需要转换为相对路径进行比较
+        let sourceRelativePath = sourcePath;
+        let targetRelativePath = targetPath;
+        
+        if (baseFolder) {
+          sourceRelativePath = path.relative(baseFolder, sourcePath);
+          targetRelativePath = path.relative(baseFolder, targetPath);
+        }
+        
         // 查找并更新路径
         let updated = false;
         const newTagsData = {};
         
         for (const [filePath, tags] of Object.entries(tagsData)) {
-          if (filePath === sourcePath) {
-            // 更新为新路径
-            newTagsData[targetPath] = tags;
+          if (filePath === sourceRelativePath) {
+            // 更新为新的相对路径
+            newTagsData[targetRelativePath] = tags;
             updated = true;
           } else {
             newTagsData[filePath] = tags;
@@ -1110,6 +1119,64 @@ ipcMain.handle('reset-app-data-directory', async () => {
     };
   } catch (error) {
     console.error('重置应用数据目录失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 在终端中打开目录
+ipcMain.handle('open-directory-in-terminal', async (event, directoryPath) => {
+  try {
+    const { spawn } = require('child_process');
+    
+    // 检查目录是否存在
+    if (!await fs.pathExists(directoryPath)) {
+      return {
+        success: false,
+        error: '目录不存在: ' + directoryPath
+      };
+    }
+    
+    // 根据操作系统选择合适的终端命令
+    let command, args;
+    
+    if (process.platform === 'win32') {
+      // Windows: 使用cmd启动新窗口并切换到指定目录
+      command = 'cmd';
+      args = ['/c', 'start', 'cmd', '/k', `cd /d "${directoryPath}"`];
+    } else if (process.platform === 'darwin') {
+      // macOS: 使用 Terminal.app
+      command = 'open';
+      args = ['-a', 'Terminal', directoryPath];
+    } else {
+      // Linux: 尝试使用常见的终端
+      const terminals = ['gnome-terminal', 'konsole', 'xterm', 'x-terminal-emulator'];
+      command = terminals[0]; // 默认使用 gnome-terminal
+      args = ['--working-directory', directoryPath];
+    }
+    
+    // 启动终端
+    console.log('尝试启动终端:', command, args, 'cwd:', directoryPath);
+    const child = spawn(command, args, {
+      cwd: directoryPath,
+      detached: true,
+      stdio: 'ignore'
+    });
+    
+    child.on('error', (error) => {
+      console.error('启动终端时发生错误:', error);
+    });
+    
+    child.unref();
+    
+    console.log('终端启动命令已执行');
+    return {
+      success: true
+    };
+  } catch (error) {
+    console.error('在终端中打开目录失败:', error);
     return {
       success: false,
       error: error.message

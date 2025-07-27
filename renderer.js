@@ -46,6 +46,7 @@ const closeSettingsBtn = document.getElementById('closeSettings');
 const appDataDirectoryInput = document.getElementById('appDataDirectoryInput');
 const selectAppDataDirectoryBtn = document.getElementById('selectAppDataDirectory');
 const resetAppDataDirectoryBtn = document.getElementById('resetAppDataDirectory');
+// const openAppDataDirectoryInTerminalBtn = document.getElementById('openAppDataDirectoryInTerminal');
 const refreshFilesBtn = document.getElementById('refreshFiles');
 // 文件统计相关元素已移除
 const saveSettingsBtn = document.getElementById('saveSettings');
@@ -322,6 +323,7 @@ function bindEvents() {
     closeSettingsBtn.addEventListener('click', closeSettingsModal);
     selectAppDataDirectoryBtn.addEventListener('click', selectAppDataDirectory);
     resetAppDataDirectoryBtn.addEventListener('click', resetAppDataDirectory);
+    
     if (refreshFilesBtn) {
     refreshFilesBtn.addEventListener('click', refreshFilesFromMainPage);
 }
@@ -338,6 +340,28 @@ function bindEvents() {
     // 视图切换按钮事件
     gridViewBtn.addEventListener('click', () => switchView('grid'));
     listViewBtn.addEventListener('click', () => switchView('list'));
+    
+    // 绑定“终端打开”按钮事件
+    const openInTerminalBtn = document.getElementById('openInTerminalBtn');
+    if (openInTerminalBtn) {
+        openInTerminalBtn.addEventListener('click', async () => {
+            try {
+                const settings = await ipcRenderer.invoke('get-current-settings');
+                const directoryPath = settings.appDataDirectory;
+                if (!directoryPath) {
+                    showToast('请先在设置中选择应用数据目录', 'warning');
+                    return;
+                }
+                const result = await ipcRenderer.invoke('open-directory-in-terminal', directoryPath);
+                if (!result.success) {
+                    showToast('打开终端失败: ' + (result.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                console.error('打开终端异常:', error);
+                showToast('打开终端异常: ' + error.message, 'error');
+            }
+        });
+    }
     
     // 初始化视图状态
     gridViewBtn.classList.toggle('active', currentViewMode === 'grid');
@@ -712,8 +736,8 @@ async function moveFile(filePath) {
         // 显示加载状态
         showLoading('正在移动文件...');
         
-        // 执行文件移动
-        const moveResult = await ipcRenderer.invoke('move-file', filePath, targetPath);
+        // 执行文件移动，传递当前工作文件夹用于相对路径转换
+        const moveResult = await ipcRenderer.invoke('move-file', filePath, targetPath, currentFolder);
         
         hideLoading();
         
@@ -721,8 +745,9 @@ async function moveFile(filePath) {
             // 移动成功，更新文件列表
             const fileIndex = allFiles.findIndex(f => f.path === filePath);
             if (fileIndex !== -1) {
-                // 更新文件路径
+                // 更新文件路径和相对路径
                 allFiles[fileIndex].path = moveResult.newPath;
+                allFiles[fileIndex].relativePath = path.relative(currentFolder, moveResult.newPath);
                 
                 // 更新标签数据中的路径
                 if (tagsData[filePath]) {
@@ -1115,6 +1140,27 @@ async function resetAppDataDirectory() {
         showToast('重置应用数据目录失败', 'error');
     }
 }
+
+// async function openAppDataDirectoryInTerminal() {
+//     try {
+//         // 获取应用数据目录设置
+//         const settings = await ipcRenderer.invoke('get-current-settings');
+//         const directoryPath = settings.appDataDirectory;
+//         
+//         console.log('应用数据目录路径:', directoryPath);
+//         console.log('是否等于H:\\文档\\pptSyncDir:', directoryPath === 'H:\\文档\\pptSyncDir');
+//         
+//         const result = await ipcRenderer.invoke('open-directory-in-terminal', directoryPath);
+//         if (result.success) {
+//             showToast('已在终端中打开应用数据目录', 'success');
+//         } else {
+//             showToast('打开终端失败: ' + result.error, 'error');
+//         }
+//     } catch (error) {
+//         console.error('在终端中打开目录失败:', error);
+//         showToast('在终端中打开目录失败: ' + error.message, 'error');
+//     }
+// }
 
 // 从主页刷新文件列表
 async function refreshFilesFromMainPage() {
