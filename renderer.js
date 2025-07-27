@@ -43,11 +43,9 @@ const closeUpdateBtn = document.getElementById('closeUpdate');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const closeSettingsBtn = document.getElementById('closeSettings');
-const dataDirectoryInput = document.getElementById('dataDirectoryInput');
-const selectDataDirectoryBtn = document.getElementById('selectDataDirectory');
-const resetDataDirectoryBtn = document.getElementById('resetDataDirectory');
-const workingDirectoryInput = document.getElementById('workingDirectoryInput');
-const selectWorkingDirectoryBtn = document.getElementById('selectWorkingDirectory');
+const appDataDirectoryInput = document.getElementById('appDataDirectoryInput');
+const selectAppDataDirectoryBtn = document.getElementById('selectAppDataDirectory');
+const resetAppDataDirectoryBtn = document.getElementById('resetAppDataDirectory');
 const refreshFilesBtn = document.getElementById('refreshFiles');
 // 文件统计相关元素已移除
 const saveSettingsBtn = document.getElementById('saveSettings');
@@ -322,11 +320,8 @@ function bindEvents() {
         settingsBtn.addEventListener('click', showSettingsModal);
     }
     closeSettingsBtn.addEventListener('click', closeSettingsModal);
-    selectDataDirectoryBtn.addEventListener('click', selectDataDirectory);
-    resetDataDirectoryBtn.addEventListener('click', resetDataDirectory);
-    if (selectWorkingDirectoryBtn) {
-        selectWorkingDirectoryBtn.addEventListener('click', selectWorkingDirectoryFromSettings);
-    }
+    selectAppDataDirectoryBtn.addEventListener('click', selectAppDataDirectory);
+    resetAppDataDirectoryBtn.addEventListener('click', resetAppDataDirectory);
     if (refreshFilesBtn) {
     refreshFilesBtn.addEventListener('click', refreshFilesFromMainPage);
 }
@@ -476,7 +471,7 @@ function createFileCard(file) {
     const modifiedDate = new Date(file.modified).toLocaleDateString('zh-CN');
     
     card.innerHTML = `
-        <div class="file-name" title="${file.name}">${file.name}</div>
+        <div class="file-name" title="${file.relativePath}">${file.relativePath}</div>
         <div class="file-info">
             大小: ${fileSize} | 修改时间: ${modifiedDate}
         </div>
@@ -878,8 +873,8 @@ async function showPreview() {
     if (previewFiles.length === 0) return;
     
     const file = previewFiles[currentPreviewIndex];
-    previewFileName.textContent = file.name;
-    previewFileName.title = file.name; // 显示完整文件名
+    previewFileName.textContent = file.relativePath;
+    previewFileName.title = file.relativePath; // 显示完整相对路径
     previewCounter.textContent = `${currentPreviewIndex + 1} / ${previewFiles.length}`;
     
     // 显示当前文件的标签
@@ -1087,58 +1082,37 @@ function closeSettingsModal() {
 async function loadCurrentSettings() {
     try {
         const settings = await ipcRenderer.invoke('get-current-settings');
-        dataDirectoryInput.value = settings.dataDirectory || '';
-        
-        // 加载工作文件夹设置
-        if (workingDirectoryInput) {
-            workingDirectoryInput.value = currentFolder || '';
-        }
+        appDataDirectoryInput.value = settings.appDataDirectory || '';
     } catch (error) {
         console.error('加载当前设置失败:', error);
-        dataDirectoryInput.value = '';
-        if (workingDirectoryInput) {
-            workingDirectoryInput.value = '';
-        }
+        appDataDirectoryInput.value = '';
     }
 }
 
-async function selectDataDirectory() {
+async function selectAppDataDirectory() {
     try {
-        const path = await ipcRenderer.invoke('select-data-directory');
+        const path = await ipcRenderer.invoke('select-app-data-directory');
         if (path) {
-            dataDirectoryInput.value = path;
+            appDataDirectoryInput.value = path;
         }
     } catch (error) {
-        console.error('选择数据目录失败:', error);
-        alert('选择数据目录失败');
+        console.error('选择应用数据目录失败:', error);
+        alert('选择应用数据目录失败');
     }
 }
 
-async function resetDataDirectory() {
+async function resetAppDataDirectory() {
     try {
-        const result = await ipcRenderer.invoke('reset-data-directory');
+        const result = await ipcRenderer.invoke('reset-app-data-directory');
         if (result.success) {
-            dataDirectoryInput.value = result.path;
-            showToast('数据目录已重置为默认值', 'success');
+            appDataDirectoryInput.value = result.path;
+            showToast('应用数据目录已重置为默认路径', 'success');
         } else {
-            showToast('重置数据目录失败', 'error');
+            showToast('重置应用数据目录失败: ' + result.error, 'error');
         }
     } catch (error) {
-        console.error('重置数据目录失败:', error);
-        showToast('重置数据目录失败', 'error');
-    }
-}
-
-// 从设置中选择工作文件夹
-async function selectWorkingDirectoryFromSettings() {
-    try {
-        const folderPath = await ipcRenderer.invoke('select-folder');
-        if (folderPath && workingDirectoryInput) {
-            workingDirectoryInput.value = folderPath;
-        }
-    } catch (error) {
-        console.error('选择工作文件夹失败:', error);
-        showToast('选择工作文件夹失败', 'error');
+        console.error('重置应用数据目录失败:', error);
+        showToast('重置应用数据目录失败', 'error');
     }
 }
 
@@ -1238,40 +1212,35 @@ function hideToast(toast) {
 async function saveSettings() {
     try {
         const settings = {
-            dataDirectory: dataDirectoryInput.value.trim() || null
+            appDataDirectory: appDataDirectoryInput.value.trim() || null
         };
-        
-        // 检查工作文件夹是否有变化
-        const newWorkingDirectory = workingDirectoryInput ? workingDirectoryInput.value.trim() : '';
-        const workingDirectoryChanged = newWorkingDirectory !== currentFolder;
         
         const result = await ipcRenderer.invoke('save-settings', settings);
         if (result.success) {
             let message = '设置保存成功！';
             
-            // 只有在数据目录真正改变且成功迁移时才显示迁移提示
-            if (result.dataDirectoryChanged && result.dataMigrated) {
+            // 如果应用数据目录改变且成功迁移时显示迁移提示
+            if (result.appDataDirectoryChanged && result.dataMigrated) {
                 message += '\n\n已自动迁移您的原有数据到新位置';
             }
             
-            // 只有在路径真正改变时才提示重启
-            if (result.dataDirectoryChanged) {
+            // 如果路径改变时提示重启
+            if (result.appDataDirectoryChanged) {
                 message += '\n\n注意：路径更改将在下次启动应用时生效';
             }
             
-            // 如果工作文件夹有变化，应用新的文件夹
-             if (workingDirectoryChanged && newWorkingDirectory) {
-                 currentFolder = newWorkingDirectory;
-                 // currentFolderEl已移除，当前文件夹展示已移至设置中
-                 
-                 // 重新加载标签数据
-                 tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
-                 
-                 // 重新扫描文件
-                 await scanFiles();
-                 
-                 message += '\n\n工作文件夹已更新';
-             }
+            // 如果工作文件夹路径改变，重新加载
+            if (result.workingDirectoryChanged && result.newWorkingDirectory) {
+                currentFolder = result.newWorkingDirectory;
+                
+                // 重新加载标签数据
+                tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
+                
+                // 重新扫描文件
+                await scanFiles();
+                
+                message += '\n\n工作文件夹已更新';
+            }
             
             showToast(message, 'success');
             closeSettingsModal();
@@ -1312,7 +1281,7 @@ function createListFileCard(file) {
     
     card.innerHTML = `
         <div class="file-info-section">
-            <div class="file-name" title="${file.name}">${file.name}</div>
+            <div class="file-name" title="${file.relativePath}">${file.relativePath}</div>
             <div class="file-info">
                 大小: ${fileSize} | 修改时间: ${modifiedDate}
             </div>

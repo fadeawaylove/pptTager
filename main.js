@@ -1064,25 +1064,25 @@ ipcMain.handle('get-current-settings', async () => {
       settings = await fs.readJson(SETTINGS_FILE);
     }
     
-    // 获取当前实际使用的数据目录
-    const currentDataDirectory = getActualDataDirectory();
+    // 获取当前实际使用的应用数据目录
+    const currentAppDataDirectory = getActualAppDataDirectory();
     
     return {
-      dataDirectory: currentDataDirectory
+      appDataDirectory: currentAppDataDirectory
     };
   } catch (error) {
     console.error('获取当前设置失败:', error);
     return {
-      dataDirectory: getDefaultDataDirectory()
+      appDataDirectory: getDefaultAppDataDirectory()
     };
   }
 });
 
-// 选择数据目录
-ipcMain.handle('select-data-directory', async () => {
+// 选择应用数据目录
+ipcMain.handle('select-app-data-directory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    title: '选择数据存储目录'
+    title: '选择应用数据目录'
   });
   
   if (!result.canceled && result.filePaths.length > 0) {
@@ -1091,25 +1091,25 @@ ipcMain.handle('select-data-directory', async () => {
   return null;
 });
 
-// 重置数据目录
-ipcMain.handle('reset-data-directory', async () => {
+// 重置应用数据目录
+ipcMain.handle('reset-app-data-directory', async () => {
   try {
     let settings = {};
     if (await fs.pathExists(SETTINGS_FILE)) {
       settings = await fs.readJson(SETTINGS_FILE);
     }
     
-    // 删除自定义数据目录设置
-    delete settings.customDataDirectory;
+    // 删除自定义应用数据目录设置
+    delete settings.customAppDataDirectory;
     await fs.writeJson(SETTINGS_FILE, settings, { spaces: 2 });
     
-    const defaultPath = getDefaultDataDirectory();
+    const defaultPath = getDefaultAppDataDirectory();
     return {
       success: true,
       path: defaultPath
     };
   } catch (error) {
-    console.error('重置数据目录失败:', error);
+    console.error('重置应用数据目录失败:', error);
     return {
       success: false,
       error: error.message
@@ -1125,23 +1125,31 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
       settings = await fs.readJson(SETTINGS_FILE);
     }
     
-    // 获取当前使用的数据目录
-    const currentDataDirectory = getActualDataDirectory();
-    let dataDirectoryChanged = false;
+    // 获取当前使用的应用数据目录
+    const currentAppDataDirectory = getActualAppDataDirectory();
+    let appDataDirectoryChanged = false;
     let dataMigrated = false;
+    let workingDirectoryChanged = false;
+    let newWorkingDirectory = null;
     
-    // 数据目录迁移逻辑（只有路径真正改变时才迁移）
-    if (newSettings.dataDirectory && newSettings.dataDirectory !== currentDataDirectory) {
-      dataDirectoryChanged = true;
-      console.log('检测到数据目录更改，开始数据迁移...');
+    // 应用数据目录迁移逻辑（只有路径真正改变时才迁移）
+    if (newSettings.appDataDirectory && newSettings.appDataDirectory !== currentAppDataDirectory) {
+      appDataDirectoryChanged = true;
+      console.log('检测到应用数据目录更改，开始数据迁移...');
+      
+      // 确保新应用数据目录存在
+      await fs.ensureDir(newSettings.appDataDirectory);
+      
+      // 创建ppt和data子目录
+      const newPptDirectory = path.join(newSettings.appDataDirectory, 'ppt');
+      const newDataDirectory = path.join(newSettings.appDataDirectory, 'data');
+      await fs.ensureDir(newPptDirectory);
+      await fs.ensureDir(newDataDirectory);
       
       // 检查原数据目录是否存在
-      if (await fs.pathExists(currentDataDirectory)) {
+      if (await fs.pathExists(currentAppDataDirectory)) {
         try {
-          // 确保新数据目录存在
-          await fs.ensureDir(newSettings.dataDirectory);
-          
-          // 迁移所有数据文件
+          // 迁移所有数据文件到新的data子目录
           const filesToMigrate = [
             'ppt-tags.json',
             'github-token.json'
@@ -1149,8 +1157,8 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
           
           // 迁移文件
           for (const fileName of filesToMigrate) {
-            const srcFile = path.join(currentDataDirectory, fileName);
-            const destFile = path.join(newSettings.dataDirectory, fileName);
+            const srcFile = path.join(currentAppDataDirectory, fileName);
+            const destFile = path.join(newDataDirectory, fileName);
             
             if (await fs.pathExists(srcFile)) {
               await fs.copy(srcFile, destFile);
@@ -1158,9 +1166,9 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
             }
           }
           
-          // 迁移缓存目录
-          const srcCacheDir = path.join(currentDataDirectory, 'cache');
-          const destCacheDir = path.join(newSettings.dataDirectory, 'cache');
+          // 迁移缓存目录到新的data子目录
+          const srcCacheDir = path.join(currentAppDataDirectory, 'cache');
+          const destCacheDir = path.join(newDataDirectory, 'cache');
           
           if (await fs.pathExists(srcCacheDir)) {
             await fs.copy(srcCacheDir, destCacheDir);
@@ -1168,18 +1176,22 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
           }
           
           dataMigrated = true;
-          console.log('数据迁移成功:', currentDataDirectory, '->', newSettings.dataDirectory);
+          console.log('数据迁移成功:', currentAppDataDirectory, '->', newDataDirectory);
         } catch (migrationError) {
           console.warn('数据迁移失败，但不影响功能:', migrationError.message);
         }
       } else {
-        console.log('原数据目录不存在，跳过数据迁移');
+        console.log('原应用数据目录不存在，跳过数据迁移');
       }
+      
+      // 设置新的工作目录为ppt子目录
+      newWorkingDirectory = newPptDirectory;
+      workingDirectoryChanged = true;
     }
     
     // 更新设置
-    if (newSettings.dataDirectory) {
-      settings.customDataDirectory = newSettings.dataDirectory;
+    if (newSettings.appDataDirectory) {
+      settings.customAppDataDirectory = newSettings.appDataDirectory;
     }
     
     // 保存设置文件
@@ -1187,8 +1199,10 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     
     return {
       success: true,
-      dataDirectoryChanged,
-      dataMigrated
+      appDataDirectoryChanged,
+      dataMigrated,
+      workingDirectoryChanged,
+      newWorkingDirectory
     };
   } catch (error) {
     console.error('保存设置失败:', error);
@@ -1199,22 +1213,28 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
   }
 });
 
-// 获取默认数据目录
-function getDefaultDataDirectory() {
+// 获取默认应用数据目录
+function getDefaultAppDataDirectory() {
   return app.getPath('userData');
 }
 
-// 获取实际使用的数据目录（用于内部使用）
-function getActualDataDirectory() {
+// 获取实际使用的应用数据目录（用于内部使用）
+function getActualAppDataDirectory() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const settings = fs.readJsonSync(SETTINGS_FILE);
-      return settings.customDataDirectory || getDefaultDataDirectory();
+      return settings.customAppDataDirectory || getDefaultAppDataDirectory();
     }
   } catch (error) {
-    console.log('读取数据目录设置失败，使用默认路径');
+    console.log('读取应用数据目录设置失败，使用默认路径');
   }
-  return getDefaultDataDirectory();
+  return getDefaultAppDataDirectory();
+}
+
+// 获取实际使用的数据目录（data子目录）
+function getActualDataDirectory() {
+  const appDataDir = getActualAppDataDirectory();
+  return path.join(appDataDir, 'data');
 }
 
 // 获取实际使用的缓存路径（用于内部使用）

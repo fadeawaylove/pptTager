@@ -410,36 +410,27 @@
             </div>
             <div class="settings-body">
                 <div class="settings-section">
-                    <h3>📁 文件夹设置</h3>
+                    <h3>📁 应用数据目录设置</h3>
                     
                     <div class="setting-item">
-                        <label for="workingDirectoryInput">PPT工作文件夹:</label>
+                        <label for="appDataDirectoryInput">应用数据目录:</label>
                         <div class="path-input-group">
-                            <input type="text" id="workingDirectoryInput" class="path-input" placeholder="选择包含PPT文件的文件夹" readonly>
-                            <button id="selectWorkingDirectory" class="btn btn-primary btn-small">选择文件夹</button>
-
+                            <input type="text" id="appDataDirectoryInput" class="path-input" placeholder="选择应用数据目录" readonly>
+                            <button id="selectAppDataDirectory" class="btn btn-primary btn-small">选择目录</button>
+                            <button id="resetAppDataDirectory" class="btn btn-secondary btn-small">重置</button>
                         </div>
-                        <p class="setting-description">选择包含PPT文件的工作文件夹，软件将扫描此文件夹中的所有PPT文件并为其提供标签管理功能。</p>
-                    </div>
-                </div>
-                
-                <div class="settings-section">
-                    <h3>💾 数据存储设置</h3>
-                    
-                    <div class="setting-item">
-                        <label for="dataDirectoryInput">数据存储目录:</label>
-                        <div class="path-input-group">
-                            <input type="text" id="dataDirectoryInput" class="path-input" placeholder="数据存储目录路径" readonly>
-                            <button id="selectDataDirectory" class="btn btn-secondary btn-small">浏览</button>
-                            <button id="resetDataDirectory" class="btn btn-secondary btn-small">重置</button>
-                        </div>
-                        <p class="setting-description">设置应用数据的统一存储目录，包括标签数据、预览缓存、GitHub Token等所有业务相关文件。更改目录时可选择是否迁移现有数据。</p>
+                        <p class="setting-description">选择应用数据的统一存储目录。此目录将包含PPT工作文件夹和数据存储文件夹，如果不存在对应的子目录，将会自动创建。</p>
                         <div class="data-directory-info">
-                            <small>📂 此目录将包含以下文件：</small>
+                            <small>📂 此目录将包含以下结构：</small>
                             <ul class="data-files-list">
-                                <li><code>ppt-tags.json</code> - 标签数据文件</li>
-                                <li><code>cache/</code> - PPT预览缓存目录</li>
-                                <li><code>github-token.json</code> - GitHub Token配置</li>
+                                <li><code>ppt/</code> - PPT工作文件夹，存放您的PPT文件</li>
+                                <li><code>data/</code> - 数据存储目录，包含：
+                                    <ul style="margin-left: 20px; margin-top: 5px;">
+                                        <li><code>ppt-tags.json</code> - 标签数据文件</li>
+                                        <li><code>cache/</code> - PPT预览缓存目录</li>
+                                        <li><code>github-token.json</code> - GitHub Token配置</li>
+                                    </ul>
+                                </li>
                             </ul>
                         </div>
                     </div>
