@@ -495,10 +495,8 @@ function createFileCard(file) {
     const modifiedDate = new Date(file.modified).toLocaleDateString('zh-CN');
     
     card.innerHTML = `
-        <div class="file-name" title="${file.relativePath}">${file.relativePath}</div>
-        <div class="file-info">
-            大小: ${fileSize} | 修改时间: ${modifiedDate}
-        </div>
+        <div class="file-name" title="${file.relativePath} \n大小: ${fileSize} | 修改时间: ${modifiedDate}">${file.relativePath}</div>
+         <div class="file-info"></div>
         <div class="file-tags">
             ${fileTags.map(tag => `<span class="file-tag">${tag}</span>`).join('')}
         </div>
@@ -1327,10 +1325,7 @@ function createListFileCard(file) {
     
     card.innerHTML = `
         <div class="file-info-section">
-            <div class="file-name" title="${file.relativePath}">${file.relativePath}</div>
-            <div class="file-info">
-                大小: ${fileSize} | 修改时间: ${modifiedDate}
-            </div>
+            <div class="file-name" title="${file.relativePath} \n大小: ${fileSize} | 修改时间: ${modifiedDate}">${file.relativePath}</div>
             <div class="file-tags">
                 ${fileTags.map(tag => `<span class="file-tag">${tag}</span>`).join('')}
             </div>
