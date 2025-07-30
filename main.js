@@ -930,27 +930,30 @@ let currentDownload = null;
 // 下载文件函数
 function downloadFile(url, outputPath, onProgress, abortSignal) {
   return new Promise((resolve, reject) => {
+    console.log(`开始下载: ${url}`);
+    console.log(`保存到: ${outputPath}`);
+    
     const file = fs.createWriteStream(outputPath);
     let isAborted = false;
     
     // 处理取消信号
     if (abortSignal) {
       abortSignal.addEventListener('abort', () => {
+        console.log('收到取消信号，正在取消下载');
         isAborted = true;
         if (currentDownload && currentDownload.request) {
           currentDownload.request.destroy();
         }
         file.close();
-        // 安全地删除文件
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(outputPath)) {
-              fs.unlinkSync(outputPath);
-            }
-          } catch (error) {
-            console.error('删除临时文件失败:', error);
+        // 删除未完成的文件
+        try {
+          if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+            console.log(`已删除取消的下载文件: ${outputPath}`);
           }
-        }, 100);
+        } catch (error) {
+          console.error(`删除临时文件失败: ${error.message}`);
+        }
         reject(new Error('下载已取消'));
       });
     }
@@ -961,15 +964,6 @@ function downloadFile(url, outputPath, onProgress, abortSignal) {
       // 处理重定向
       if (response.statusCode === 302 || response.statusCode === 301) {
         file.close();
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(outputPath)) {
-              fs.unlinkSync(outputPath);
-            }
-          } catch (error) {
-            console.error('删除临时文件失败:', error);
-          }
-        }, 100);
         return downloadFile(response.headers.location, outputPath, onProgress, abortSignal)
           .then(resolve)
           .catch(reject);
@@ -977,15 +971,6 @@ function downloadFile(url, outputPath, onProgress, abortSignal) {
       
       if (response.statusCode !== 200) {
         file.close();
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(outputPath)) {
-              fs.unlinkSync(outputPath);
-            }
-          } catch (error) {
-            console.error('删除临时文件失败:', error);
-          }
-        }, 100);
         return reject(new Error(`下载失败: HTTP ${response.statusCode}`));
       }
       
@@ -1005,21 +990,21 @@ function downloadFile(url, outputPath, onProgress, abortSignal) {
       
       file.on('finish', () => {
         if (isAborted) return;
-        file.close();
-        resolve(outputPath);
+        console.log(`文件下载完成: ${outputPath}`);
+        file.close((err) => {
+          if (err) {
+            console.error(`文件关闭错误: ${err.message}`);
+            reject(err);
+          } else {
+            console.log(`文件已成功保存: ${outputPath}`);
+            resolve(outputPath);
+          }
+        });
       });
       
       file.on('error', (err) => {
+        console.error(`文件写入错误: ${err.message}`);
         file.close();
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(outputPath)) {
-              fs.unlinkSync(outputPath);
-            }
-          } catch (error) {
-            console.error('删除临时文件失败:', error);
-          }
-        }, 100);
         reject(err);
       });
     });
@@ -1029,32 +1014,16 @@ function downloadFile(url, outputPath, onProgress, abortSignal) {
     
     request.on('error', (err) => {
       if (isAborted) return;
+      console.error(`网络请求错误: ${err.message}`);
       file.close();
-      setTimeout(() => {
-        try {
-          if (fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
-          }
-        } catch (error) {
-          console.error('删除临时文件失败:', error);
-        }
-      }, 100);
       reject(err);
     });
     
     request.setTimeout(30000, () => {
       if (isAborted) return;
+      console.log('下载超时');
       request.destroy();
       file.close();
-      setTimeout(() => {
-        try {
-          if (fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
-          }
-        } catch (error) {
-          console.error('删除临时文件失败:', error);
-        }
-      }, 100);
       reject(new Error('下载超时'));
     });
   });
@@ -1079,7 +1048,26 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
     // 获取文件名
     const urlParts = installerUrl.split('/');
     const fileName = urlParts[urlParts.length - 1];
-    const downloadPath = path.join(os.tmpdir(), fileName);
+    const downloadDir = path.join(app.getPath('userData'), 'updates');
+    await fs.ensureDir(downloadDir);
+    const downloadPath = path.join(downloadDir, fileName);
+    
+    console.log(`开始下载更新包: ${installerUrl}`);
+    console.log(`下载目录: ${downloadDir}`);
+    console.log(`下载路径: ${downloadPath}`);
+    console.log(`文件名: ${fileName}`);
+    
+    // 检查下载目录是否存在，如果不存在则创建
+    if (!await fs.pathExists(downloadDir)) {
+      await fs.ensureDir(downloadDir);
+      console.log(`创建下载目录: ${downloadDir}`);
+    }
+    
+    // 如果文件已存在，先删除
+    if (await fs.pathExists(downloadPath)) {
+      await fs.remove(downloadPath);
+      console.log(`删除已存在的文件: ${downloadPath}`);
+    }
     
     // 发送下载开始事件
     mainWindow.webContents.send('download-progress', {
@@ -1088,15 +1076,22 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
     });
     
     // 下载文件
-    await downloadFile(installerUrl, downloadPath, (progress, downloaded, total) => {
-      mainWindow.webContents.send('download-progress', {
-        status: 'downloading',
-        progress: progress,
-        downloaded: downloaded,
-        total: total,
-        message: `下载中... ${progress}%`
-      });
-    }, downloadAbortController.signal);
+    try {
+      await downloadFile(installerUrl, downloadPath, (progress, downloaded, total) => {
+        mainWindow.webContents.send('download-progress', {
+          status: 'downloading',
+          progress: progress,
+          downloaded: downloaded,
+          total: total,
+          message: `下载中... ${progress}%`
+        });
+      }, downloadAbortController.signal);
+      
+      console.log(`下载完成: ${downloadPath}`);
+    } catch (downloadError) {
+      console.error(`下载失败: ${downloadError.message}`);
+      throw downloadError;
+    }
     
     // 下载完成
     mainWindow.webContents.send('download-progress', {
@@ -1104,15 +1099,48 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
       message: '下载完成，准备安装...'
     });
     
+    // 检查下载的文件是否存在
+    if (!await fs.pathExists(downloadPath)) {
+      console.error(`文件检查失败: ${downloadPath} 不存在`);
+      // 列出下载目录的内容以便调试
+      try {
+        const downloadFiles = await fs.readdir(downloadDir);
+        console.log(`下载目录内容: ${downloadFiles.join(', ')}`);
+      } catch (listError) {
+        console.error(`无法列出下载目录内容: ${listError.message}`);
+      }
+      throw new Error(`下载的安装包文件不存在: ${downloadPath}`);
+    }
+    
+    // 检查文件大小
+    const stats = await fs.stat(downloadPath);
+    if (stats.size === 0) {
+      throw new Error('下载的安装包文件为空');
+    }
+    
+    console.log(`准备启动安装程序: ${downloadPath}, 文件大小: ${stats.size} bytes`);
+    
     // 启动安装程序
     if (process.platform === 'win32') {
       // Windows: 启动exe安装程序
-      spawn(downloadPath, [], { detached: true, stdio: 'ignore' });
+      try {
+        console.log(`准备启动安装程序，路径: ${downloadPath}`);
+        const child = spawn(downloadPath, [], { detached: true, stdio: 'ignore' });
+        child.on('error', (err) => {
+          console.error('安装程序启动错误:', err);
+        });
+        console.log('安装程序已启动');
+      } catch (spawnError) {
+        console.error('启动安装程序失败:', spawnError);
+        throw new Error(`启动安装程序失败: ${spawnError.message}`);
+      }
     } else if (process.platform === 'darwin') {
       // macOS: 打开dmg文件
+      console.log(`准备打开安装程序，路径: ${downloadPath}`);
       exec(`open "${downloadPath}"`);
     } else if (process.platform === 'linux') {
       // Linux: 使其可执行并运行
+      console.log(`准备运行安装程序，路径: ${downloadPath}`);
       exec(`chmod +x "${downloadPath}" && "${downloadPath}"`);
     }
     
