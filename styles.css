@@ -1877,7 +1877,8 @@ body {
 .toast {
     position: fixed;
     top: 20px;
-    right: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100%);
     background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
     color: white;
     padding: 16px 20px;
@@ -1887,7 +1888,6 @@ body {
     max-width: 400px;
     font-size: 14px;
     line-height: 1.5;
-    transform: translateX(100%);
     transition: transform 0.3s ease-in-out;
     display: flex;
     align-items: flex-start;
@@ -1895,7 +1895,7 @@ body {
 }
 
 .toast.show {
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
 }
 
 .toast.success {
@@ -1955,8 +1955,8 @@ body {
 @media (max-width: 768px) {
     .toast {
         top: 10px;
-        right: 10px;
         left: 10px;
+        right: 10px;
         max-width: none;
         transform: translateY(-100%);
     }

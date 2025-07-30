@@ -13,6 +13,8 @@ let previewFiles = [];
 let currentViewMode = localStorage.getItem('viewMode') || 'grid'; // 'grid' 或 'list'
 let currentSuggestionIndex = -1;
 let availableTags = [];
+// 预览预加载缓存
+let previewCache = new Map();
 
 // DOM元素
 // selectFolderBtn已移除，选择文件夹功能已移至设置中
@@ -154,7 +156,7 @@ async function init() {
         // 确保启动画面显示足够时间，让用户看到内容加载完成
         // 如果有文件夹和文件，等待内容渲染完成后再结束启动画面
         let minDisplayTime = 800; // 基础显示时间
-        if (lastFolder && allFiles.length > 0) {
+        if (currentFolder && allFiles.length > 0) {
             // 有内容时，确保用户能看到搜索结果展示
             minDisplayTime = Math.max(1200, totalTime + 500);
         }
@@ -423,6 +425,9 @@ async function scanFiles() {
         allFiles = files;
         filteredFiles = [...allFiles];
         
+        // 文件列表更新时清理预览缓存
+        clearPreviewCache();
+        
         if (allFiles.length === 0) {
             showEmptyState('该文件夹中没有找到PPT文件');
         } else {
@@ -446,6 +451,9 @@ async function scanFilesQuietly() {
     try {
         allFiles = await ipcRenderer.invoke('scan-ppt-files', currentFolder);
         filteredFiles = [...allFiles];
+        
+        // 文件列表更新时清理预览缓存
+        clearPreviewCache();
         
         if (allFiles.length > 0) {
             // 静默渲染文件列表
@@ -915,6 +923,20 @@ async function showPreview() {
     // 显示模态框
     previewModal.classList.remove('hidden');
     
+    // 检查缓存中是否已有当前文件的预览
+    if (previewCache.has(file.path)) {
+        const cachedResult = previewCache.get(file.path);
+        displayPreviewResult(cachedResult);
+        previewLoading.classList.add('hidden');
+        
+        // 即使有缓存，也要预加载前后文件
+        preloadAdjacentPreviews();
+        
+        // 更新导航按钮状态
+        updateNavigationButtons();
+        return;
+    }
+    
     // 设置10秒超时
     const timeoutId = setTimeout(() => {
         console.log('预览生成超时，显示超时提示');
@@ -929,21 +951,15 @@ async function showPreview() {
         // 清除超时定时器
         clearTimeout(timeoutId);
         
-        if (result.success) {
-            // 成功获取图片预览
-            previewImage.src = result.data;
-            previewImage.classList.remove('hidden');
-        } else if (result.svg) {
-            // 显示SVG（安装提示或错误信息）
-            const svgDataUrl = `data:image/svg+xml;base64,${btoa(result.svg)}`;
-            previewImage.src = svgDataUrl;
-            previewImage.classList.remove('hidden');
-        } else {
-            // 其他错误情况
-            previewImage.src = '';
-            previewImage.alt = result.error || '无法生成预览';
-            previewImage.classList.remove('hidden');
-        }
+        // 缓存预览结果
+        previewCache.set(file.path, result);
+        
+        // 显示预览结果
+        displayPreviewResult(result);
+        
+        // 预加载前后一张PPT的预览
+        preloadAdjacentPreviews();
+        
     } catch (error) {
         // 清除超时定时器
         clearTimeout(timeoutId);
@@ -955,10 +971,81 @@ async function showPreview() {
         previewLoading.classList.add('hidden');
     }
     
-    // 更新导航按钮状态（循环模式下始终可用，除非只有一张图片）
+    // 更新导航按钮状态
+    updateNavigationButtons();
+}
+
+// 显示预览结果的辅助函数
+function displayPreviewResult(result) {
+    if (result.success) {
+        // 成功获取图片预览
+        previewImage.src = result.data;
+        previewImage.classList.remove('hidden');
+    } else if (result.svg) {
+        // 显示SVG（安装提示或错误信息）
+        const svgDataUrl = `data:image/svg+xml;base64,${btoa(result.svg)}`;
+        previewImage.src = svgDataUrl;
+        previewImage.classList.remove('hidden');
+    } else {
+        // 其他错误情况
+        previewImage.src = '';
+        previewImage.alt = result.error || '无法生成预览';
+        previewImage.classList.remove('hidden');
+    }
+}
+
+// 更新导航按钮状态的辅助函数
+function updateNavigationButtons() {
     const hasMultipleFiles = previewFiles.length > 1;
     prevBtn.disabled = !hasMultipleFiles;
     nextBtn.disabled = !hasMultipleFiles;
+}
+
+// 预加载前后一张PPT预览的函数
+async function preloadAdjacentPreviews() {
+    if (previewFiles.length <= 1) return;
+    
+    const preloadTasks = [];
+    
+    // 计算前一张的索引（循环）
+    const prevIndex = currentPreviewIndex === 0 ? previewFiles.length - 1 : currentPreviewIndex - 1;
+    const prevFile = previewFiles[prevIndex];
+    
+    // 计算后一张的索引（循环）
+    const nextIndex = currentPreviewIndex === previewFiles.length - 1 ? 0 : currentPreviewIndex + 1;
+    const nextFile = previewFiles[nextIndex];
+    
+    // 预加载前一张（如果未缓存）
+    if (!previewCache.has(prevFile.path)) {
+        preloadTasks.push(preloadSinglePreview(prevFile.path));
+    }
+    
+    // 预加载后一张（如果未缓存）
+    if (!previewCache.has(nextFile.path)) {
+        preloadTasks.push(preloadSinglePreview(nextFile.path));
+    }
+    
+    // 并行执行预加载任务
+    if (preloadTasks.length > 0) {
+        Promise.allSettled(preloadTasks).then(results => {
+            const successCount = results.filter(r => r.status === 'fulfilled').length;
+            if (successCount > 0) {
+                console.log(`成功预加载 ${successCount} 个预览`);
+            }
+        });
+    }
+}
+
+// 预加载单个预览的函数
+async function preloadSinglePreview(filePath) {
+    try {
+        const result = await ipcRenderer.invoke('get-ppt-preview', filePath);
+        previewCache.set(filePath, result);
+        return result;
+    } catch (error) {
+        console.error('预加载预览失败:', filePath, error);
+        throw error;
+    }
 }
 
 function showPrevPreview() {
@@ -1033,6 +1120,14 @@ function closePreviewModal() {
     previewImage.src = '';
     currentPreviewIndex = 0;
     previewFiles = [];
+    // 清理预览缓存以释放内存
+    clearPreviewCache();
+}
+
+// 清理预览缓存的函数
+function clearPreviewCache() {
+    previewCache.clear();
+    console.log('预览缓存已清理');
 }
 
 // 帮助模态框函数
@@ -1184,7 +1279,7 @@ async function refreshFilesFromMainPage() {
 // updateFolderStats函数已移除，文件统计功能已从设置页面中删除
 
 // 冒泡提示功能
-function showToast(message, type = 'success', duration = 4000) {
+function showToast(message, type = 'success', duration = 2000) {
     // 移除现有的toast
     const existingToast = document.querySelector('.toast');
     if (existingToast) {
