@@ -113,20 +113,25 @@ async function init() {
     const startTime = Date.now();
     
     try {
-        // 1. 获取上次选择的文件夹
-        const lastFolder = await ipcRenderer.invoke('get-last-folder');
-        
-        // 2. 加载已保存的标签数据
-        tagsData = await ipcRenderer.invoke('load-tags', lastFolder);
-        
-        // 3. 绑定事件
-        bindEvents();
-        
-        // 4. 如果有上次选择的文件夹，扫描文件
-        if (lastFolder) {
-            currentFolder = lastFolder;
-            // currentFolderEl已移除，当前文件夹展示已移至设置中
+        // 1. 获取PPT文件夹路径并设置为当前扫描目录
+        const pptDirectory = await ipcRenderer.invoke('get-ppt-directory');
+        if (pptDirectory) {
+            currentFolder = pptDirectory;
+            
+            // 2. 加载已保存的标签数据，使用PPT目录作为基础路径
+            tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
+            
+            // 3. 绑定事件
+            bindEvents();
+            
+            // 4. 扫描PPT文件夹中的文件
             await scanFilesQuietly();
+        } else {
+            // 如果无法获取PPT目录，仍然绑定事件
+            bindEvents();
+            
+            // 显示错误状态
+            showEmptyState('无法获取PPT文件夹路径，请检查应用数据目录设置');
         }
         
         // 5. 更新统计信息和标签面板
@@ -1268,15 +1273,23 @@ async function saveSettings() {
                 message += '\n\n注意：路径更改将在下次启动应用时生效';
             }
             
-            // 如果应用数据目录改变，重新加载标签数据但保持当前工作文件夹
-            if (result.appDataDirectoryChanged && currentFolder) {
-                // 重新加载标签数据（使用新的数据目录）
-                tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
-                
-                // 重新扫描文件以更新显示
-                await scanFiles();
-                
-                message += '\n\n数据目录已更新，标签数据已重新加载';
+            // 如果应用数据目录改变，更新PPT目录并重新加载数据
+            if (result.appDataDirectoryChanged) {
+                // 获取新的PPT目录路径
+                const newPptDirectory = await ipcRenderer.invoke('get-ppt-directory');
+                if (newPptDirectory) {
+                    currentFolder = newPptDirectory;
+                    
+                    // 重新加载标签数据（使用新的PPT目录）
+                    tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
+                    
+                    // 重新扫描文件以更新显示
+                    await scanFiles();
+                    
+                    message += '\n\n数据目录已更新，PPT文件夹已切换，标签数据已重新加载';
+                } else {
+                    message += '\n\n警告：无法获取新的PPT文件夹路径';
+                }
             }
             
             showToast(message, 'success');

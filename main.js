@@ -1272,6 +1272,25 @@ function getGithubTokenPath() {
   return path.join(dataDir, 'github-token.json');
 }
 
+// 获取实际使用的PPT文件夹路径
+function getActualPPTDirectory() {
+  const appDataDir = getActualAppDataDirectory();
+  return path.join(appDataDir, 'ppt');
+}
+
+// 获取PPT文件夹路径的IPC处理程序
+ipcMain.handle('get-ppt-directory', async () => {
+  try {
+    const pptDir = getActualPPTDirectory();
+    // 确保ppt目录存在
+    await fs.ensureDir(pptDir);
+    return pptDir;
+  } catch (error) {
+    console.error('获取PPT目录失败:', error);
+    return null;
+  }
+});
+
 // 生成错误提示SVG
 function generateErrorSVG(message) {
   return `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
