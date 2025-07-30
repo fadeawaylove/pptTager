@@ -41,6 +41,25 @@ const updateBtn = document.getElementById('updateBtn');
 const updateModal = document.getElementById('updateModal');
 const closeUpdateBtn = document.getElementById('closeUpdate');
 
+// 更新提示弹窗相关元素
+const updateNotificationModal = document.getElementById('updateNotificationModal');
+const closeUpdateNotificationBtn = document.getElementById('closeUpdateNotification');
+const currentVersionNotificationEl = document.getElementById('currentVersionNotification');
+const latestVersionNotificationEl = document.getElementById('latestVersionNotification');
+const releaseNotesNotificationEl = document.getElementById('releaseNotesNotification');
+const publishTimeNotificationEl = document.getElementById('publishTimeNotification');
+const downloadUpdateNotificationBtn = document.getElementById('downloadUpdateNotification');
+const laterUpdateNotificationBtn = document.getElementById('laterUpdateNotification');
+const skipUpdateNotificationBtn = document.getElementById('skipUpdateNotification');
+const updateDetailsNotificationEl = document.getElementById('updateDetailsNotification');
+const downloadProgressNotificationEl = document.getElementById('downloadProgressNotification');
+const progressFillNotificationEl = document.getElementById('progressFillNotification');
+const progressTextNotificationEl = document.getElementById('progressTextNotification');
+const cancelDownloadNotificationBtn = document.getElementById('cancelDownloadNotification');
+const toggleUpdateDetailsBtn = document.getElementById('toggleUpdateDetails');
+const updateDetailsContentEl = document.getElementById('updateDetailsContent');
+const detailsArrowEl = document.getElementById('detailsArrow');
+
 // 设置相关元素
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
@@ -319,6 +338,40 @@ function bindEvents() {
         updateModal.addEventListener('click', (e) => {
             if (e.target === updateModal) {
                 closeUpdateModal();
+            }
+        });
+    }
+    
+    // 更新提示弹窗事件监听器
+    if (closeUpdateNotificationBtn) {
+        closeUpdateNotificationBtn.addEventListener('click', closeUpdateNotificationModal);
+    }
+    
+    if (downloadUpdateNotificationBtn) {
+        downloadUpdateNotificationBtn.addEventListener('click', handleDownloadUpdateNotification);
+    }
+    
+    if (laterUpdateNotificationBtn) {
+        laterUpdateNotificationBtn.addEventListener('click', closeUpdateNotificationModal);
+    }
+    
+    if (skipUpdateNotificationBtn) {
+        skipUpdateNotificationBtn.addEventListener('click', handleSkipUpdateNotification);
+    }
+    
+    if (cancelDownloadNotificationBtn) {
+        cancelDownloadNotificationBtn.addEventListener('click', handleCancelDownload);
+    }
+    
+    if (toggleUpdateDetailsBtn) {
+        toggleUpdateDetailsBtn.addEventListener('click', toggleUpdateDetails);
+    }
+    
+    // 点击更新提示弹窗外部关闭
+    if (updateNotificationModal) {
+        updateNotificationModal.addEventListener('click', (e) => {
+            if (e.target === updateNotificationModal) {
+                closeUpdateNotificationModal();
             }
         });
     }
@@ -1530,6 +1583,7 @@ async function initMainPageVersionDisplay() {
 let updateInfo = null;
 // 全局变量跟踪下载状态
 let isDownloading = false;
+let downloadController = null; // 用于取消下载的控制器
 
 // 检查更新
 async function checkForUpdates() {
@@ -1559,25 +1613,9 @@ async function checkForUpdates() {
             updateInfo = result; // 保存更新信息
             
             if (result.hasUpdate) {
-                // 有更新可用
-                downloadUpdateBtn.classList.remove('hidden');
-                
-                // 根据是否有直接下载链接更新按钮文本
-                if (result.installerUrl) {
-                    downloadUpdateBtn.textContent = '自动下载安装';
-                    downloadUpdateBtn.onclick = () => downloadAndInstallUpdate();
-                } else {
-                    downloadUpdateBtn.textContent = '前往下载页面';
-                    downloadUpdateBtn.onclick = () => downloadUpdate(result.downloadUrl);
-                }
-                
-                // 显示更新详情
-                if (result.releaseNotes) {
-                    releaseNotesEl.textContent = result.releaseNotes;
-                    publishTimeEl.textContent = new Date(result.publishedAt).toLocaleString('zh-CN');
-                    updateDetailsEl.classList.remove('hidden');
-                }
-                
+                // 有更新可用，直接弹出更新提示弹窗
+                addNewBadgeToUpdateButton();
+                showUpdateNotificationModal(result);
             } else {
                 // 已是最新版本
                 showToast('当前已是最新版本', 'info');
@@ -1756,6 +1794,30 @@ ipcRenderer.on('download-progress', (event, progressData) => {
                 checkUpdateBtn.disabled = true;
             }
             break;
+        case 'cancelled':
+            // 处理下载取消状态
+            downloadUpdateBtn.textContent = '下载已取消';
+            showToast(message, 'info');
+            // 隐藏下载进度条
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+            }
+            // 重置下载状态和恢复按钮状态
+            isDownloading = false;
+            setTimeout(async () => {
+                downloadUpdateBtn.disabled = false;
+                downloadUpdateBtn.textContent = '自动下载安装';
+                if (checkUpdateBtn) {
+                    checkUpdateBtn.disabled = false;
+                }
+                // 取消自动更新模式
+                try {
+                    await ipcRenderer.invoke('set-auto-update-mode', false);
+                } catch (e) {
+                    console.error('取消自动更新模式失败:', e);
+                }
+            }, 2000);
+            break;
         case 'error':
             downloadUpdateBtn.textContent = '下载失败';
             showToast(message, 'error');
@@ -1786,17 +1848,319 @@ ipcRenderer.on('download-progress', (event, progressData) => {
 function showUpdateModal() {
     // 移除new标识
     removeNewBadgeFromUpdateButton();
-    // 初始化版本信息
-    initVersionInfo();
-    // 显示模态框
-    if (updateModal) {
-        updateModal.classList.remove('hidden');
+    
+    // 如果有更新信息，直接显示更新提示弹窗
+    if (updateInfo && updateInfo.hasUpdate) {
+        showUpdateNotificationModal(updateInfo);
+    } else {
+        // 没有更新信息或没有更新，显示原来的更新模态框
+        initVersionInfo();
+        if (updateModal) {
+            updateModal.classList.remove('hidden');
+        }
     }
 }
 
 function closeUpdateModal() {
     if (updateModal) {
         updateModal.classList.add('hidden');
+    }
+}
+
+// 更新提示弹窗函数
+function showUpdateNotificationModal(updateInfo) {
+    if (!updateInfo || !updateNotificationModal) return;
+    
+    // 填充版本信息
+    if (currentVersionNotificationEl) {
+        currentVersionNotificationEl.textContent = updateInfo.currentVersion;
+    }
+    if (latestVersionNotificationEl) {
+        latestVersionNotificationEl.textContent = updateInfo.latestVersion;
+    }
+    
+    // 填充更新详情（支持Markdown格式）
+    if (releaseNotesNotificationEl) {
+        const releaseNotes = updateInfo.releaseNotes || '暂无更新说明';
+        releaseNotesNotificationEl.innerHTML = formatMarkdownToHtml(releaseNotes);
+    }
+    
+    // 填充发布时间
+    if (publishTimeNotificationEl && updateInfo.publishedAt) {
+        const publishDate = new Date(updateInfo.publishedAt);
+        publishTimeNotificationEl.textContent = `${publishDate.toLocaleDateString('zh-CN')} ${publishDate.toLocaleTimeString('zh-CN')}`;
+    }
+    
+    // 重置下载进度和隐藏相关元素
+    if (downloadProgressNotificationEl) {
+        downloadProgressNotificationEl.classList.add('hidden');
+    }
+    if (progressFillNotificationEl) {
+        progressFillNotificationEl.style.width = '0%';
+    }
+    if (progressTextNotificationEl) {
+        progressTextNotificationEl.textContent = '0%';
+    }
+    if (cancelDownloadNotificationBtn) {
+        cancelDownloadNotificationBtn.classList.add('hidden');
+    }
+    
+    // 重置下载按钮状态
+    if (downloadUpdateNotificationBtn) {
+        downloadUpdateNotificationBtn.disabled = false;
+        downloadUpdateNotificationBtn.textContent = '立即下载';
+        downloadUpdateNotificationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    
+    // 默认折叠更新详情
+    if (updateDetailsContentEl) {
+        updateDetailsContentEl.classList.add('hidden');
+    }
+    if (detailsArrowEl) {
+        detailsArrowEl.style.transform = 'rotate(0deg)';
+    }
+    
+    // 显示弹窗
+    updateNotificationModal.classList.remove('hidden');
+}
+
+function closeUpdateNotificationModal() {
+    if (updateNotificationModal) {
+        updateNotificationModal.classList.add('hidden');
+    }
+}
+
+// 处理更新提示弹窗中的下载按钮点击
+async function handleDownloadUpdateNotification() {
+    if (!updateInfo) return;
+    
+    // 显示下载进度条
+    if (downloadProgressNotificationEl) {
+        downloadProgressNotificationEl.classList.remove('hidden');
+    }
+    
+    // 禁用下载按钮并更新样式
+    if (downloadUpdateNotificationBtn) {
+        downloadUpdateNotificationBtn.disabled = true;
+        downloadUpdateNotificationBtn.textContent = '下载中...';
+        downloadUpdateNotificationBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+    
+    // 显示取消按钮
+    if (cancelDownloadNotificationBtn) {
+        cancelDownloadNotificationBtn.classList.remove('hidden');
+    }
+    
+    try {
+        if (updateInfo.installerUrl) {
+            // 自动下载安装
+            await downloadAndInstallUpdateNotification();
+        } else {
+            // 打开下载页面
+            await ipcRenderer.invoke('open-download-page', updateInfo.downloadUrl);
+            closeUpdateNotificationModal();
+        }
+    } catch (error) {
+        console.error('下载更新失败:', error);
+        showToast('下载更新失败: ' + error.message, 'error');
+        
+        // 恢复按钮状态
+        if (downloadUpdateNotificationBtn) {
+            downloadUpdateNotificationBtn.disabled = false;
+            downloadUpdateNotificationBtn.textContent = '立即下载';
+            downloadUpdateNotificationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        
+        // 隐藏进度条和取消按钮
+        if (downloadProgressNotificationEl) {
+            downloadProgressNotificationEl.classList.add('hidden');
+        }
+        if (cancelDownloadNotificationBtn) {
+            cancelDownloadNotificationBtn.classList.add('hidden');
+        }
+    }
+}
+
+// 处理跳过版本
+function handleSkipUpdateNotification() {
+    if (updateInfo && updateInfo.latestVersion) {
+        // 将跳过的版本保存到本地存储
+        localStorage.setItem('skippedVersion', updateInfo.latestVersion);
+        showToast(`已跳过版本 v${updateInfo.latestVersion}`, 'info');
+    }
+    closeUpdateNotificationModal();
+}
+
+// 简单的Markdown转HTML函数
+function formatMarkdownToHtml(markdown) {
+    if (!markdown) return '';
+    
+    let html = markdown
+        // 转义HTML特殊字符
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // 处理标题
+        .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mb-3 mt-4 text-gray-800">$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mb-3 mt-4 text-gray-800">$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mb-4 mt-2 text-gray-800">$1</h1>')
+        // 处理粗体
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
+        // 处理斜体
+        .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+        // 处理代码
+        .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">$1</code>')
+        // 处理链接
+        .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline" target="_blank">$1</a>')
+        // 处理列表项
+        .replace(/^[\s]*[-\*\+] (.*$)/gim, '<li class="ml-4 mb-1 list-disc">$1</li>');
+    
+    // 包装列表项
+    html = html.replace(/(<li[^>]*>.*?<\/li>)/gs, '<ul class="mb-3 ml-4">$1</ul>');
+    
+    // 处理段落：将双换行转换为段落分隔，单换行保持为换行
+    html = html
+        // 先处理双换行为段落分隔符
+        .replace(/\n\s*\n/g, '</p><p class="mb-3">')
+        // 处理单换行为br
+        .replace(/\n/g, '<br>');
+    
+    // 包装在段落中
+    html = '<p class="mb-3">' + html + '</p>';
+    
+    // 清理空段落和多余的br标签
+    html = html
+        .replace(/<p[^>]*>\s*<\/p>/g, '') // 移除空段落
+        .replace(/(<br>\s*){3,}/g, '<br><br>') // 限制连续br标签最多2个
+        .replace(/<p[^>]*>\s*(<br>\s*)+/g, '<p class="mb-3">') // 移除段落开头的br
+        .replace(/(<br>\s*)+\s*<\/p>/g, '</p>'); // 移除段落结尾的br
+    
+    return html;
+}
+
+// 处理取消下载
+async function handleCancelDownload() {
+    try {
+        // 调用主进程取消下载
+        const result = await ipcRenderer.invoke('cancel-download');
+        
+        if (result.success) {
+            // 本地状态重置
+            if (downloadController) {
+                downloadController.abort();
+                downloadController = null;
+            }
+            
+            isDownloading = false;
+            
+            // 隐藏进度条
+            if (downloadProgressNotificationEl) {
+                downloadProgressNotificationEl.classList.add('hidden');
+            }
+            
+            // 重新启用下载按钮
+            if (downloadUpdateNotificationBtn) {
+                downloadUpdateNotificationBtn.disabled = false;
+                downloadUpdateNotificationBtn.textContent = '立即下载';
+                downloadUpdateNotificationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            
+            // 隐藏取消按钮
+            if (cancelDownloadNotificationBtn) {
+                cancelDownloadNotificationBtn.classList.add('hidden');
+            }
+            
+            showToast('下载已取消', 'info');
+        } else {
+            console.error('取消下载失败:', result.error);
+            showToast('取消下载失败', 'error');
+        }
+    } catch (error) {
+        console.error('取消下载时发生错误:', error);
+        showToast('取消下载时发生错误', 'error');
+    }
+}
+
+// 切换更新详情的显示/隐藏
+function toggleUpdateDetails() {
+    const isExpanded = !updateDetailsContentEl.classList.contains('hidden');
+    
+    if (isExpanded) {
+        // 折叠
+        updateDetailsContentEl.classList.add('hidden');
+        detailsArrowEl.style.transform = 'rotate(0deg)';
+    } else {
+        // 展开
+        updateDetailsContentEl.classList.remove('hidden');
+        detailsArrowEl.style.transform = 'rotate(180deg)';
+    }
+}
+
+// 自动下载安装更新（弹窗版本）
+async function downloadAndInstallUpdateNotification() {
+    if (!updateInfo || !updateInfo.installerUrl) {
+        showToast('无法获取安装包下载链接', 'error');
+        return;
+    }
+    
+    isDownloading = true;
+    
+    // 重置进度条状态
+    if (progressFillNotificationEl) {
+        progressFillNotificationEl.style.width = '0%';
+    }
+    if (progressTextNotificationEl) {
+        progressTextNotificationEl.textContent = '0%';
+    }
+    
+    // 创建下载控制器
+    downloadController = new AbortController();
+    
+    try {
+        // 监听下载进度
+        const progressHandler = (event, progressData) => {
+            if (progressFillNotificationEl && progressTextNotificationEl && progressData.progress) {
+                progressFillNotificationEl.style.width = progressData.progress + '%';
+                if (progressData.downloaded && progressData.total) {
+                    progressTextNotificationEl.textContent = `${Math.round(progressData.progress)}% (${formatFileSize(progressData.downloaded)}/${formatFileSize(progressData.total)})`;
+                } else {
+                    progressTextNotificationEl.textContent = Math.round(progressData.progress) + '%';
+                }
+            }
+        };
+        
+        ipcRenderer.on('download-progress', progressHandler);
+        
+        const result = await ipcRenderer.invoke('download-and-install-update', updateInfo.installerUrl);
+        
+        // 移除进度监听器
+        ipcRenderer.removeListener('download-progress', progressHandler);
+        
+        if (result.success) {
+            showToast('更新下载完成，即将重启应用进行安装...', 'success');
+            closeUpdateNotificationModal();
+            // 隐藏取消按钮
+            if (cancelDownloadNotificationBtn) {
+                cancelDownloadNotificationBtn.classList.add('hidden');
+            }
+        } else {
+            // 检查是否是用户取消
+            if (result.cancelled) {
+                console.log('下载已被用户取消');
+                return; // 用户取消，不显示错误信息
+            }
+            throw new Error(result.error || '下载失败');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('下载已被用户取消');
+            return; // 用户取消，不显示错误信息
+        }
+        console.error('下载安装更新失败:', error);
+        showToast('下载安装更新失败: ' + error.message, 'error');
+    } finally {
+        isDownloading = false;
+        downloadController = null;
     }
 }
 
@@ -1824,12 +2188,22 @@ async function checkForUpdatesQuietly() {
             updateInfo = result;
             
             if (result.hasUpdate) {
-                console.log('发现新版本，添加NEW标识');
-                // 如果有更新，在检查更新按钮上添加new标识
-                addNewBadgeToUpdateButton();
+                console.log('发现新版本，检查是否已跳过');
                 
-                // 显示一个简单的提示
-                showToast(`发现新版本 v${result.latestVersion}，点击"检查更新"按钮查看详情`, 'info', 8000);
+                // 检查是否已跳过此版本
+                const skippedVersion = localStorage.getItem('skippedVersion');
+                if (skippedVersion === result.latestVersion) {
+                    console.log('用户已跳过此版本，不显示弹窗');
+                    // 仍然添加new标识，但不弹窗
+                    addNewBadgeToUpdateButton();
+                } else {
+                    console.log('直接弹出更新提示弹窗');
+                    // 如果有更新，在检查更新按钮上添加new标识
+                    addNewBadgeToUpdateButton();
+                    
+                    // 直接弹出更新提示弹窗
+                    showUpdateNotificationModal(result);
+                }
             } else {
                 console.log('已是最新版本');
             }

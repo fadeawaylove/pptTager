@@ -924,24 +924,68 @@ ipcMain.handle('open-github-token-guide', async () => {
   }
 });
 
+// 全局变量跟踪当前下载
+let currentDownload = null;
+
 // 下载文件函数
-function downloadFile(url, outputPath, onProgress) {
+function downloadFile(url, outputPath, onProgress, abortSignal) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(outputPath);
+    let isAborted = false;
+    
+    // 处理取消信号
+    if (abortSignal) {
+      abortSignal.addEventListener('abort', () => {
+        isAborted = true;
+        if (currentDownload && currentDownload.request) {
+          currentDownload.request.destroy();
+        }
+        file.close();
+        // 安全地删除文件
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(outputPath)) {
+              fs.unlinkSync(outputPath);
+            }
+          } catch (error) {
+            console.error('删除临时文件失败:', error);
+          }
+        }, 100);
+        reject(new Error('下载已取消'));
+      });
+    }
     
     const request = https.get(url, (response) => {
+      if (isAborted) return;
+      
       // 处理重定向
       if (response.statusCode === 302 || response.statusCode === 301) {
         file.close();
-        fs.unlinkSync(outputPath);
-        return downloadFile(response.headers.location, outputPath, onProgress)
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(outputPath)) {
+              fs.unlinkSync(outputPath);
+            }
+          } catch (error) {
+            console.error('删除临时文件失败:', error);
+          }
+        }, 100);
+        return downloadFile(response.headers.location, outputPath, onProgress, abortSignal)
           .then(resolve)
           .catch(reject);
       }
       
       if (response.statusCode !== 200) {
         file.close();
-        fs.unlinkSync(outputPath);
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(outputPath)) {
+              fs.unlinkSync(outputPath);
+            }
+          } catch (error) {
+            console.error('删除临时文件失败:', error);
+          }
+        }, 100);
         return reject(new Error(`下载失败: HTTP ${response.statusCode}`));
       }
       
@@ -949,6 +993,7 @@ function downloadFile(url, outputPath, onProgress) {
       let downloadedSize = 0;
       
       response.on('data', (chunk) => {
+        if (isAborted) return;
         downloadedSize += chunk.length;
         if (onProgress && totalSize) {
           const progress = Math.round((downloadedSize / totalSize) * 100);
@@ -959,31 +1004,64 @@ function downloadFile(url, outputPath, onProgress) {
       response.pipe(file);
       
       file.on('finish', () => {
+        if (isAborted) return;
         file.close();
         resolve(outputPath);
       });
       
       file.on('error', (err) => {
         file.close();
-        fs.unlinkSync(outputPath);
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(outputPath)) {
+              fs.unlinkSync(outputPath);
+            }
+          } catch (error) {
+            console.error('删除临时文件失败:', error);
+          }
+        }, 100);
         reject(err);
       });
     });
     
+    // 保存当前下载的引用
+    currentDownload = { request, file };
+    
     request.on('error', (err) => {
+      if (isAborted) return;
       file.close();
-      fs.unlinkSync(outputPath);
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+          }
+        } catch (error) {
+          console.error('删除临时文件失败:', error);
+        }
+      }, 100);
       reject(err);
     });
     
     request.setTimeout(30000, () => {
+      if (isAborted) return;
       request.destroy();
       file.close();
-      fs.unlinkSync(outputPath);
+      setTimeout(() => {
+        try {
+          if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+          }
+        } catch (error) {
+          console.error('删除临时文件失败:', error);
+        }
+      }, 100);
       reject(new Error('下载超时'));
     });
   });
 }
+
+// 全局变量跟踪下载状态
+let downloadAbortController = null;
 
 // IPC处理程序：下载并安装更新
 ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
@@ -994,6 +1072,9 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
         error: '没有找到适合当前平台的安装包'
       };
     }
+    
+    // 创建新的取消控制器
+    downloadAbortController = new AbortController();
     
     // 获取文件名
     const urlParts = installerUrl.split('/');
@@ -1015,7 +1096,7 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
         total: total,
         message: `下载中... ${progress}%`
       });
-    });
+    }, downloadAbortController.signal);
     
     // 下载完成
     mainWindow.webContents.send('download-progress', {
@@ -1051,6 +1132,19 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
     };
     
   } catch (error) {
+    // 检查是否是用户取消
+    if (error.message === '下载已取消') {
+      mainWindow.webContents.send('download-progress', {
+        status: 'cancelled',
+        message: '下载已取消'
+      });
+      return {
+        success: false,
+        error: '下载已取消',
+        cancelled: true
+      };
+    }
+    
     mainWindow.webContents.send('download-progress', {
       status: 'error',
       message: '下载失败: ' + error.message
@@ -1060,6 +1154,22 @@ ipcMain.handle('download-and-install-update', async (event, installerUrl) => {
       success: false,
       error: error.message
     };
+  } finally {
+    downloadAbortController = null;
+    currentDownload = null;
+  }
+});
+
+// IPC处理程序：取消下载
+ipcMain.handle('cancel-download', async () => {
+  try {
+    if (downloadAbortController) {
+      downloadAbortController.abort();
+      return { success: true };
+    }
+    return { success: false, error: '没有正在进行的下载' };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 

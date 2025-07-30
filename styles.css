@@ -1258,6 +1258,8 @@ body {
     gap: 8px;
 }
 
+/* 更新提示弹窗的原有样式已移除，现在使用 Tailwind CSS */
+
 /* 帮助模态框样式 */
 .help-modal {
     z-index: 1001;
