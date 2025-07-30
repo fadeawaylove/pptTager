@@ -1853,11 +1853,9 @@ function showUpdateModal() {
     if (updateInfo && updateInfo.hasUpdate) {
         showUpdateNotificationModal(updateInfo);
     } else {
-        // 没有更新信息或没有更新，显示原来的更新模态框
-        initVersionInfo();
-        if (updateModal) {
-            updateModal.classList.remove('hidden');
-        }
+        // 没有更新信息或没有更新，也显示新的更新提示弹窗
+        // 先检查更新，然后显示结果
+        checkForUpdates();
     }
 }
 
