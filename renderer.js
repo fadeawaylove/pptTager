@@ -1268,17 +1268,15 @@ async function saveSettings() {
                 message += '\n\n注意：路径更改将在下次启动应用时生效';
             }
             
-            // 如果工作文件夹路径改变，重新加载
-            if (result.workingDirectoryChanged && result.newWorkingDirectory) {
-                currentFolder = result.newWorkingDirectory;
-                
-                // 重新加载标签数据
+            // 如果应用数据目录改变，重新加载标签数据但保持当前工作文件夹
+            if (result.appDataDirectoryChanged && currentFolder) {
+                // 重新加载标签数据（使用新的数据目录）
                 tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
                 
-                // 重新扫描文件
+                // 重新扫描文件以更新显示
                 await scanFiles();
                 
-                message += '\n\n工作文件夹已更新';
+                message += '\n\n数据目录已更新，标签数据已重新加载';
             }
             
             showToast(message, 'success');

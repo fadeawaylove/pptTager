@@ -1195,8 +1195,6 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     // 获取当前使用的应用数据目录
     const currentAppDataDirectory = getActualAppDataDirectory();
     let appDataDirectoryChanged = false;
-    let workingDirectoryChanged = false;
-    let newWorkingDirectory = null;
     
     // 应用数据目录更改逻辑（不进行数据迁移）
     if (newSettings.appDataDirectory && newSettings.appDataDirectory !== currentAppDataDirectory) {
@@ -1206,15 +1204,9 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
       // 确保新应用数据目录存在
       await fs.ensureDir(newSettings.appDataDirectory);
       
-      // 创建ppt和data子目录
-      const newPptDirectory = path.join(newSettings.appDataDirectory, 'ppt');
+      // 创建data子目录用于存储标签数据
       const newDataDirectory = path.join(newSettings.appDataDirectory, 'data');
-      await fs.ensureDir(newPptDirectory);
       await fs.ensureDir(newDataDirectory);
-      
-      // 设置新的工作目录为ppt子目录
-      newWorkingDirectory = newPptDirectory;
-      workingDirectoryChanged = true;
     }
     
     // 更新设置
@@ -1227,9 +1219,7 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     
     return {
       success: true,
-      appDataDirectoryChanged,
-      workingDirectoryChanged,
-      newWorkingDirectory
+      appDataDirectoryChanged
     };
   } catch (error) {
     console.error('保存设置失败:', error);
