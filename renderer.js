@@ -1263,11 +1263,6 @@ async function saveSettings() {
         if (result.success) {
             let message = '设置保存成功！';
             
-            // 如果应用数据目录改变且成功迁移时显示迁移提示
-            if (result.appDataDirectoryChanged && result.dataMigrated) {
-                message += '\n\n已自动迁移您的原有数据到新位置';
-            }
-            
             // 如果路径改变时提示重启
             if (result.appDataDirectoryChanged) {
                 message += '\n\n注意：路径更改将在下次启动应用时生效';

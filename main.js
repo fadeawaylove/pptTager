@@ -1195,14 +1195,13 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     // 获取当前使用的应用数据目录
     const currentAppDataDirectory = getActualAppDataDirectory();
     let appDataDirectoryChanged = false;
-    let dataMigrated = false;
     let workingDirectoryChanged = false;
     let newWorkingDirectory = null;
     
-    // 应用数据目录迁移逻辑（只有路径真正改变时才迁移）
+    // 应用数据目录更改逻辑（不进行数据迁移）
     if (newSettings.appDataDirectory && newSettings.appDataDirectory !== currentAppDataDirectory) {
       appDataDirectoryChanged = true;
-      console.log('检测到应用数据目录更改，开始数据迁移...');
+      console.log('检测到应用数据目录更改');
       
       // 确保新应用数据目录存在
       await fs.ensureDir(newSettings.appDataDirectory);
@@ -1212,44 +1211,6 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
       const newDataDirectory = path.join(newSettings.appDataDirectory, 'data');
       await fs.ensureDir(newPptDirectory);
       await fs.ensureDir(newDataDirectory);
-      
-      // 检查原数据目录是否存在
-      if (await fs.pathExists(currentAppDataDirectory)) {
-        try {
-          // 迁移所有数据文件到新的data子目录
-          const filesToMigrate = [
-            'ppt-tags.json',
-            'github-token.json'
-          ];
-          
-          // 迁移文件
-          for (const fileName of filesToMigrate) {
-            const srcFile = path.join(currentAppDataDirectory, fileName);
-            const destFile = path.join(newDataDirectory, fileName);
-            
-            if (await fs.pathExists(srcFile)) {
-              await fs.copy(srcFile, destFile);
-              console.log(`迁移文件: ${fileName}`);
-            }
-          }
-          
-          // 迁移缓存目录到新的data子目录
-          const srcCacheDir = path.join(currentAppDataDirectory, 'cache');
-          const destCacheDir = path.join(newDataDirectory, 'cache');
-          
-          if (await fs.pathExists(srcCacheDir)) {
-            await fs.copy(srcCacheDir, destCacheDir);
-            console.log('迁移缓存目录');
-          }
-          
-          dataMigrated = true;
-          console.log('数据迁移成功:', currentAppDataDirectory, '->', newDataDirectory);
-        } catch (migrationError) {
-          console.warn('数据迁移失败，但不影响功能:', migrationError.message);
-        }
-      } else {
-        console.log('原应用数据目录不存在，跳过数据迁移');
-      }
       
       // 设置新的工作目录为ppt子目录
       newWorkingDirectory = newPptDirectory;
@@ -1267,7 +1228,6 @@ ipcMain.handle('save-settings', async (event, newSettings) => {
     return {
       success: true,
       appDataDirectoryChanged,
-      dataMigrated,
       workingDirectoryChanged,
       newWorkingDirectory
     };
