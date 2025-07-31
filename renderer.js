@@ -384,6 +384,12 @@ function bindEvents() {
     selectAppDataDirectoryBtn.addEventListener('click', selectAppDataDirectory);
     resetAppDataDirectoryBtn.addEventListener('click', resetAppDataDirectory);
     
+    // 打开应用数据目录按钮事件
+    const openAppDataDirectoryBtn = document.getElementById('openAppDataDirectory');
+    if (openAppDataDirectoryBtn) {
+        openAppDataDirectoryBtn.addEventListener('click', openAppDataDirectory);
+    }
+    
     if (refreshFilesBtn) {
     refreshFilesBtn.addEventListener('click', refreshFilesFromMainPage);
 }
@@ -1289,6 +1295,24 @@ async function resetAppDataDirectory() {
     } catch (error) {
         console.error('重置应用数据目录失败:', error);
         showToast('重置应用数据目录失败', 'error');
+    }
+}
+
+async function openAppDataDirectory() {
+    try {
+        const settings = await ipcRenderer.invoke('get-current-settings');
+        const directoryPath = settings.appDataDirectory;
+        if (!directoryPath) {
+            showToast('请先在设置中选择应用数据目录', 'warning');
+            return;
+        }
+        const result = await ipcRenderer.invoke('open-directory-in-explorer', directoryPath);
+        if (!result.success) {
+            showToast('打开目录失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (error) {
+        console.error('打开应用数据目录失败:', error);
+        showToast('打开应用数据目录失败: ' + error.message, 'error');
     }
 }
 

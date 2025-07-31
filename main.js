@@ -1322,6 +1322,32 @@ ipcMain.handle('open-directory-in-terminal', async (event, directoryPath) => {
   }
 });
 
+// 在资源管理器中打开目录
+ipcMain.handle('open-directory-in-explorer', async (event, directoryPath) => {
+  try {
+    // 检查目录是否存在
+    if (!await fs.pathExists(directoryPath)) {
+      return {
+        success: false,
+        error: '目录不存在: ' + directoryPath
+      };
+    }
+    
+    // 使用shell.openPath打开目录
+    await shell.openPath(directoryPath);
+    
+    return {
+      success: true
+    };
+  } catch (error) {
+    console.error('在资源管理器中打开目录失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
 // 保存设置
 ipcMain.handle('save-settings', async (event, newSettings) => {
   try {
