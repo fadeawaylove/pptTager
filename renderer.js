@@ -342,6 +342,12 @@ function bindEvents() {
         });
     }
     
+    // 绑定首页"打开目录"按钮事件
+    const openAppDataDirectoryMainBtn = document.getElementById('openAppDataDirectoryMain');
+    if (openAppDataDirectoryMainBtn) {
+        openAppDataDirectoryMainBtn.addEventListener('click', openAppDataDirectory);
+    }
+    
     // 更新提示弹窗事件监听器
     if (closeUpdateNotificationBtn) {
         closeUpdateNotificationBtn.addEventListener('click', closeUpdateNotificationModal);
