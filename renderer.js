@@ -1347,9 +1347,19 @@ async function openAppDataDirectory() {
 async function refreshFilesFromMainPage() {
     try {
         if (currentFolder) {
-            showToast('正在刷新文件列表...', 'info', 2000);
+            showToast('正在刷新文件列表和标签...', 'info', 2000);
+            
+            // 重新加载标签数据
+            tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
+            
+            // 重新扫描文件
             await scanFiles();
-            showToast('文件列表已刷新', 'success');
+            
+            // 更新统计信息和标签面板
+            updateStats();
+            updateTagsPanel();
+            
+            showToast('文件列表和标签已刷新', 'success');
         } else {
             showToast('请先在设置中选择工作文件夹', 'warning');
         }
