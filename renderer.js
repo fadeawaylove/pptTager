@@ -1349,6 +1349,9 @@ async function refreshFilesFromMainPage() {
         if (currentFolder) {
             showToast('正在刷新文件列表和标签...', 'info', 2000);
             
+            // 清除当前的标签筛选状态
+            selectedTags.clear();
+            
             // 重新加载标签数据
             tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
             
