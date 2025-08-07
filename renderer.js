@@ -24,6 +24,8 @@ const loadingEl = document.getElementById('loadingMessage');
 const emptyEl = document.getElementById('emptyMessage');
 const searchInput = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearch');
+const tagFilterInput = document.getElementById('tagFilterInput');
+const clearTagFilterBtn = document.getElementById('clearTagFilter');
 const totalFilesEl = document.getElementById('totalFiles');
 const taggedFilesEl = document.getElementById('taggedFiles');
 const filteredFilesEl = document.getElementById('filteredFiles');
@@ -220,6 +222,10 @@ function bindEvents() {
     // 搜索
     searchInput.addEventListener('input', handleSearch);
     clearSearchBtn.addEventListener('click', clearSearch);
+    
+    // 标签过滤
+    tagFilterInput.addEventListener('input', handleTagFilter);
+    clearTagFilterBtn.addEventListener('click', clearTagFilter);
     
     // 模态框事件
     closeModalBtn.addEventListener('click', closeModal);
@@ -897,7 +903,20 @@ function updateStats() {
     filteredFilesEl.textContent = filteredFiles.length;
 }
 
-function updateTagsPanel() {
+// 标签过滤相关函数
+function handleTagFilter(e) {
+    const query = e.target.value.trim().toLowerCase();
+    clearTagFilterBtn.style.display = query ? 'block' : 'none';
+    updateTagsPanel(query);
+}
+
+function clearTagFilter() {
+    tagFilterInput.value = '';
+    clearTagFilterBtn.style.display = 'none';
+    updateTagsPanel();
+}
+
+function updateTagsPanel(filterQuery = '') {
     const allTagsSet = new Set();
     
     // 收集所有标签
@@ -905,9 +924,26 @@ function updateTagsPanel() {
         tags.forEach(tag => allTagsSet.add(tag));
     });
     
+    // 过滤标签
+    let filteredTags = Array.from(allTagsSet).sort();
+    if (filterQuery) {
+        filteredTags = filteredTags.filter(tag => 
+            tag.toLowerCase().includes(filterQuery)
+        );
+    }
+    
     allTagsEl.innerHTML = '';
     
-    Array.from(allTagsSet).sort().forEach(tag => {
+    if (filteredTags.length === 0 && filterQuery) {
+        // 显示无匹配结果提示
+        const noResults = document.createElement('div');
+        noResults.className = 'text-gray-500 text-sm p-2';
+        noResults.textContent = '没有找到匹配的标签';
+        allTagsEl.appendChild(noResults);
+        return;
+    }
+    
+    filteredTags.forEach(tag => {
         const tagEl = document.createElement('div');
         tagEl.className = `tag-item ${selectedTags.has(tag) ? 'active' : ''}`;
         tagEl.textContent = tag;
