@@ -209,7 +209,7 @@
             <!-- Body区域：占据剩余空间，图片在此区域内撑满但不溢出 -->
             <main class="flex-1 bg-black rounded-b-lg relative overflow-hidden min-h-0">
                 <!-- 导航按钮：绝对定位在body内 -->
-                <button id="prevBtn" class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/20 text-white/60 border-0 w-11 h-11 rounded-full text-xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-lg opacity-30 border border-white/10 hover:bg-black/50 hover:text-white/90 hover:scale-110 hover:opacity-80 hover:border-white/30 disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="上一个">‹</button>
+                <button id="prevBtn" class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 text-white/80 border-0 w-12 h-12 rounded-full text-2xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-xl opacity-70 border border-white/20 hover:bg-black/70 hover:text-white hover:scale-110 hover:opacity-100 hover:border-white/50 hover:shadow-2xl disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="上一个">‹</button>
                 
                 <!-- 图片容器：在body内居中显示，确保不溢出 -->
                 <div class="w-full h-full flex items-center justify-center p-4">
@@ -220,7 +220,12 @@
                     <img id="previewImage" class="max-w-full max-h-full w-auto h-auto object-contain rounded shadow-2xl" alt="PPT预览" />
                 </div>
                 
-                <button id="nextBtn" class="absolute right-4 top-1/2 -translate-y-1/2 bg-black/20 text-white/60 border-0 w-11 h-11 rounded-full text-xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-lg opacity-30 border border-white/10 hover:bg-black/50 hover:text-white/90 hover:scale-110 hover:opacity-80 hover:border-white/30 disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="下一个">›</button>
+                <!-- 重新生成按钮 -->
+                <button id="retryPreviewBtn" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm transition-colors hidden z-10 shadow-lg" title="重新生成预览">
+                    🔄 重新生成
+                </button>
+                
+                <button id="nextBtn" class="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 text-white/80 border-0 w-12 h-12 rounded-full text-2xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-xl opacity-70 border border-white/20 hover:bg-black/70 hover:text-white hover:scale-110 hover:opacity-100 hover:border-white/50 hover:shadow-2xl disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="下一个">›</button>
             </main>
             
         </div>

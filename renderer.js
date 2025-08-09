@@ -16,6 +16,12 @@ let availableTags = [];
 // 预览预加载缓存
 let previewCache = new Map();
 
+// 预览生成并发控制
+let activePreviewTasks = new Map(); // 正在进行的预览任务
+let previewTaskQueue = []; // 预览任务队列
+let maxConcurrentPreviews = 5; // 最大并发预览数量
+let isProcessingQueue = false; // 是否正在处理队列
+
 // DOM元素
 // selectFolderBtn已移除，选择文件夹功能已移至设置中
 // currentFolderEl已移除，当前文件夹展示已移至设置中
@@ -275,10 +281,11 @@ function bindEvents() {
     
     // 预览模态框事件
     closePreviewBtn.addEventListener('click', closePreviewModal);
-    prevBtn.addEventListener('click', showPrevPreview);
-    nextBtn.addEventListener('click', showNextPreview);
-    editPreviewTagsBtn.addEventListener('click', editPreviewTags);
-    openPreviewFileBtn.addEventListener('click', openPreviewFile);
+prevBtn.addEventListener('click', showPrevPreview);
+nextBtn.addEventListener('click', showNextPreview);
+editPreviewTagsBtn.addEventListener('click', editPreviewTags);
+openPreviewFileBtn.addEventListener('click', openPreviewFile);
+document.getElementById('retryPreviewBtn').addEventListener('click', retryPreview);
     
     // 点击预览模态框外部关闭
     previewModal.addEventListener('click', (e) => {
@@ -1027,7 +1034,7 @@ async function showPreview() {
     // 检查缓存中是否已有当前文件的预览
     if (previewCache.has(file.path)) {
         const cachedResult = previewCache.get(file.path);
-        displayPreviewResult(cachedResult);
+        displayPreviewResult(cachedResult, file.path);
         previewLoading.classList.add('hidden');
         
         // 即使有缓存，也要预加载前后文件
@@ -1038,36 +1045,21 @@ async function showPreview() {
         return;
     }
     
-    // 设置10秒超时
-    const timeoutId = setTimeout(() => {
-        console.log('预览生成超时，显示超时提示');
-        previewLoading.classList.add('hidden');
-        showTimeoutMessage();
-    }, 10000);
-    
     try {
-        // 获取PPT预览
-        const result = await ipcRenderer.invoke('get-ppt-preview', file.path);
-        
-        // 清除超时定时器
-        clearTimeout(timeoutId);
-        
-        // 缓存预览结果
-        previewCache.set(file.path, result);
+        // 使用并发控制的预览请求（主预览，优先级高）
+        const result = await requestPreview(file.path, true);
         
         // 显示预览结果
-        displayPreviewResult(result);
+        displayPreviewResult(result, file.path);
         
         // 预加载前后一张PPT的预览
         preloadAdjacentPreviews();
         
     } catch (error) {
-        // 清除超时定时器
-        clearTimeout(timeoutId);
         console.error('获取预览失败:', error);
-        previewImage.src = '';
-        previewImage.alt = '预览加载失败';
-        previewImage.classList.remove('hidden');
+        // 预览失败时显示重试按钮，而不是错误信息
+        showRetryButton();
+        previewImage.classList.add('hidden');
     } finally {
         previewLoading.classList.add('hidden');
     }
@@ -1077,21 +1069,30 @@ async function showPreview() {
 }
 
 // 显示预览结果的辅助函数
-function displayPreviewResult(result) {
+function displayPreviewResult(result, filePath) {
+    // 只有当前正在预览的文件才能更新显示
+    if (previewFiles.length > 0 && previewFiles[currentPreviewIndex].path !== filePath) {
+        return; // 不是当前预览的文件，忽略结果
+    }
+    
     if (result.success) {
         // 成功获取图片预览
         previewImage.src = result.data;
         previewImage.classList.remove('hidden');
+        hideRetryButton();
     } else if (result.svg) {
         // 显示SVG（安装提示或错误信息）
-        const svgDataUrl = `data:image/svg+xml;base64,${btoa(result.svg)}`;
+        // 使用encodeURIComponent来安全处理包含Unicode字符的SVG
+        const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`;
         previewImage.src = svgDataUrl;
         previewImage.classList.remove('hidden');
+        showRetryButton();
     } else {
         // 其他错误情况
         previewImage.src = '';
         previewImage.alt = result.error || '无法生成预览';
         previewImage.classList.remove('hidden');
+        showRetryButton();
     }
 }
 
@@ -1140,8 +1141,8 @@ async function preloadAdjacentPreviews() {
 // 预加载单个预览的函数
 async function preloadSinglePreview(filePath) {
     try {
-        const result = await ipcRenderer.invoke('get-ppt-preview', filePath);
-        previewCache.set(filePath, result);
+        // 使用并发控制的预览请求（预加载，优先级低）
+        const result = await requestPreview(filePath, false);
         return result;
     } catch (error) {
         console.error('预加载预览失败:', filePath, error);
@@ -1196,7 +1197,7 @@ function showTimeoutMessage() {
         
         <!-- 说明文字 -->
         <text x="200" y="160" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="white" opacity="0.9">
-            PPT文件较大或系统繁忙，预览生成时间超过10秒
+            PPT文件较大或系统繁忙，预览生成时间超过30秒
         </text>
         
         <!-- 建议 -->
@@ -1207,17 +1208,51 @@ function showTimeoutMessage() {
         <!-- 重试按钮提示 -->
         <rect x="150" y="210" width="100" height="30" fill="white" opacity="0.2" rx="15"/>
         <text x="200" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">
-            可以重新打开预览重试
+            点击下方重新生成按钮重试
         </text>
     </svg>`;
     
-    const svgDataUrl = `data:image/svg+xml;base64,${btoa(timeoutSVG)}`;
+    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(timeoutSVG)}`;
     previewImage.src = svgDataUrl;
     previewImage.classList.remove('hidden');
+    showRetryButton();
+}
+
+// 显示重新生成按钮
+function showRetryButton() {
+    const retryBtn = document.getElementById('retryPreviewBtn');
+    if (retryBtn) {
+        retryBtn.classList.remove('hidden');
+    }
+}
+
+// 隐藏重新生成按钮
+function hideRetryButton() {
+    const retryBtn = document.getElementById('retryPreviewBtn');
+    if (retryBtn) {
+        retryBtn.classList.add('hidden');
+    }
+}
+
+// 重新生成预览
+async function retryPreview() {
+    if (previewFiles.length === 0) return;
+    
+    const file = previewFiles[currentPreviewIndex];
+    
+    // 从缓存中移除当前文件的预览
+    previewCache.delete(file.path);
+    
+    // 隐藏重新生成按钮
+    hideRetryButton();
+    
+    // 重新显示预览
+    await showPreview();
 }
 
 function closePreviewModal() {
     previewModal.classList.add('hidden');
+    hideRetryButton();
     previewImage.src = '';
     currentPreviewIndex = 0;
     previewFiles = [];
@@ -1228,7 +1263,111 @@ function closePreviewModal() {
 // 清理预览缓存的函数
 function clearPreviewCache() {
     previewCache.clear();
-    console.log('预览缓存已清理');
+}
+
+// 预览任务队列管理
+async function processPreviewQueue() {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+    
+    while (previewTaskQueue.length > 0 && activePreviewTasks.size < maxConcurrentPreviews) {
+        const task = previewTaskQueue.shift();
+        if (task && !activePreviewTasks.has(task.filePath)) {
+            executePreviewTask(task);
+        }
+    }
+    
+    isProcessingQueue = false;
+}
+
+// 执行预览任务
+async function executePreviewTask(task) {
+    const { filePath, resolve, reject, isMainPreview } = task;
+    
+    // 如果已经有相同文件的任务在执行，等待其完成
+    if (activePreviewTasks.has(filePath)) {
+        try {
+            const result = await activePreviewTasks.get(filePath);
+            resolve(result);
+        } catch (error) {
+            reject(error);
+        }
+        return;
+    }
+    
+    // 创建预览任务Promise
+    const previewPromise = (async () => {
+        try {
+            console.log(`开始生成预览: ${filePath}`);
+            const result = await ipcRenderer.invoke('get-ppt-preview', filePath);
+            
+            // 缓存预览结果
+            previewCache.set(filePath, result);
+            
+            console.log(`预览生成完成: ${filePath}`);
+            return result;
+        } catch (error) {
+            console.error(`预览生成失败: ${filePath}`, error);
+            throw error;
+        } finally {
+            // 任务完成后从活动任务中移除
+            activePreviewTasks.delete(filePath);
+            // 继续处理队列中的其他任务
+            processPreviewQueue();
+        }
+    })();
+    
+    // 将任务添加到活动任务中
+    activePreviewTasks.set(filePath, previewPromise);
+    
+    try {
+        const result = await previewPromise;
+        resolve(result);
+    } catch (error) {
+        reject(error);
+    }
+}
+
+// 请求预览（带并发控制）
+function requestPreview(filePath, isMainPreview = false) {
+    return new Promise((resolve, reject) => {
+        // 检查缓存
+        if (previewCache.has(filePath)) {
+            resolve(previewCache.get(filePath));
+            return;
+        }
+        
+        // 检查是否已有相同任务在队列中
+        const existingTaskIndex = previewTaskQueue.findIndex(task => task.filePath === filePath);
+        if (existingTaskIndex !== -1) {
+            // 如果是主预览请求，提升优先级
+            if (isMainPreview) {
+                const existingTask = previewTaskQueue[existingTaskIndex];
+                previewTaskQueue.splice(existingTaskIndex, 1);
+                previewTaskQueue.unshift(existingTask);
+            }
+            return;
+        }
+        
+        // 创建新任务
+        const task = {
+            filePath,
+            resolve,
+            reject,
+            isMainPreview,
+            timestamp: Date.now()
+        };
+        
+        // 主预览请求优先级更高，插入队列前面
+        if (isMainPreview) {
+            previewTaskQueue.unshift(task);
+        } else {
+            previewTaskQueue.push(task);
+        }
+        
+        // 开始处理队列
+        processPreviewQueue();
+    });
 }
 
 // 帮助模态框函数

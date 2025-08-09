@@ -4,9 +4,13 @@ const fs = require('fs-extra');
 const { exec, spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
+const crypto = require('crypto');
 
 // 全局变量跟踪自动更新模式
 let isAutoUpdateMode = false;
+
+// 预览生成任务管理
+let activePreviewTasks = new Map(); // 正在进行的预览生成任务
 
 let mainWindow;
 const DATA_FILE = path.join(app.getPath('userData'), 'ppt-tags.json');
@@ -419,76 +423,61 @@ ipcMain.handle('get-ppt-preview', async (event, filePath) => {
   try {
     console.log('开始处理PPT预览:', filePath);
     
-    // 首先检查LibreOffice是否可用
-    const isLibreOfficeAvailable = await checkLibreOfficeAvailable();
-    
-    if (!isLibreOfficeAvailable) {
-      console.log('LibreOffice未安装，返回安装提示');
-      return {
-        success: false,
-        error: 'LibreOffice未安装',
-        svg: generateInstallPromptSVG()
-      };
+    // 检查是否已有相同文件的任务在执行
+    if (activePreviewTasks.has(filePath)) {
+      console.log('相同文件的预览任务正在执行，等待完成:', filePath);
+      return await activePreviewTasks.get(filePath);
     }
     
-    // 生成缓存文件路径
-    const fileName = path.basename(filePath, path.extname(filePath));
-    const cacheDir = getActualCachePath();
-    const outputPath = path.join(cacheDir, `${fileName}.png`);
-    
-    // 检查缓存是否存在且是最新的
-    if (fs.existsSync(outputPath)) {
+    // 创建预览任务Promise
+    const previewPromise = (async () => {
       try {
-        const pptStat = fs.statSync(filePath);
-        const cacheStat = fs.statSync(outputPath);
+        // 首先检查LibreOffice是否可用
+        const isLibreOfficeAvailable = await checkLibreOfficeAvailable();
         
-        // 如果缓存文件比PPT文件新，则使用缓存
-        if (cacheStat.mtime > pptStat.mtime) {
-          console.log('使用缓存的预览图片:', outputPath);
-          const imageData = fs.readFileSync(outputPath);
+        if (!isLibreOfficeAvailable) {
+          console.log('LibreOffice未安装，返回安装提示');
+          return {
+            success: false,
+            error: 'LibreOffice未安装',
+            svg: generateInstallPromptSVG()
+          };
+        }
+        
+        // 使用新的缩略图管理策略
+        const thumbnailResult = await getThumbnailForFile(filePath);
+        
+        if (thumbnailResult.success) {
+          console.log('获取缩略图成功:', thumbnailResult.cached ? '使用缓存' : '新生成');
+          const imageData = fs.readFileSync(thumbnailResult.thumbnailPath);
           return {
             success: true,
             data: `data:image/png;base64,${imageData.toString('base64')}`,
-            cached: true
+            cached: thumbnailResult.cached
           };
         } else {
-          console.log('PPT文件已更新，需要重新生成预览');
-          // 删除过期的缓存文件
-          fs.unlinkSync(outputPath);
+          console.log('获取缩略图失败:', thumbnailResult.error);
+          return {
+            success: false,
+            error: thumbnailResult.error,
+            svg: generateErrorSVG(thumbnailResult.error)
+          };
         }
-      } catch (error) {
-        console.log('检查缓存文件时出错:', error);
-        // 如果检查失败，删除可能损坏的缓存文件
-        try {
-          fs.unlinkSync(outputPath);
-        } catch (unlinkError) {
-          // 忽略删除错误
-        }
+      } finally {
+        // 任务完成后从活动任务中移除
+        activePreviewTasks.delete(filePath);
       }
-    }
+    })();
     
-    // 使用LibreOffice转换
-    const success = await convertPPTToImage(filePath, outputPath);
+    // 将任务添加到活动任务中
+    activePreviewTasks.set(filePath, previewPromise);
     
-    if (success && fs.existsSync(outputPath)) {
-      console.log('LibreOffice转换成功:', outputPath);
-      const imageData = fs.readFileSync(outputPath);
-      return {
-        success: true,
-        data: `data:image/png;base64,${imageData.toString('base64')}`,
-        cached: false
-      };
-    } else {
-      console.log('LibreOffice转换失败，返回错误提示');
-      return {
-        success: false,
-        error: 'LibreOffice转换失败',
-        svg: generateErrorSVG('转换失败')
-      };
-    }
+    return await previewPromise;
     
   } catch (error) {
     console.error('PPT预览处理错误:', error);
+    // 确保从活动任务中移除
+    activePreviewTasks.delete(filePath);
     return {
       success: false,
       error: error.message,
@@ -1481,6 +1470,121 @@ function generateErrorSVG(message) {
       请检查文件是否完整或重新尝试
     </text>
   </svg>`;
+}
+
+// 获取文件的MD5哈希值
+function getFileMD5(filePath) {
+  const fileBuffer = fs.readFileSync(filePath);
+  const hashSum = crypto.createHash('md5');
+  hashSum.update(fileBuffer);
+  return hashSum.digest('hex');
+}
+
+// 获取缩略图映射文件路径
+function getThumbnailMappingPath() {
+  const dataDir = getActualDataDirectory();
+  return path.join(dataDir, 'thumbnail.json');
+}
+
+// 读取缩略图映射
+async function readThumbnailMapping() {
+  const mappingPath = getThumbnailMappingPath();
+  try {
+    if (await fs.pathExists(mappingPath)) {
+      return await fs.readJson(mappingPath);
+    }
+  } catch (error) {
+    console.log('读取缩略图映射失败:', error);
+  }
+  return {};
+}
+
+// 保存缩略图映射
+async function saveThumbnailMapping(mapping) {
+  const mappingPath = getThumbnailMappingPath();
+  try {
+    await fs.ensureFile(mappingPath);
+    await fs.writeJson(mappingPath, mapping, { spaces: 2 });
+  } catch (error) {
+    console.error('保存缩略图映射失败:', error);
+  }
+}
+
+// 获取文件的缩略图
+async function getThumbnailForFile(filePath) {
+  try {
+    // 计算文件的MD5值
+    const fileMD5 = getFileMD5(filePath);
+    const cacheDir = getActualCachePath();
+    await fs.ensureDir(cacheDir);
+    
+    // 新的缩略图文件路径（使用MD5作为文件名）
+    const newThumbnailPath = path.join(cacheDir, `${fileMD5}.png`);
+    
+    // 读取缩略图映射
+    const thumbnailMapping = await readThumbnailMapping();
+    
+    // 获取文件的相对路径作为映射键
+    const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
+    const existingMD5 = thumbnailMapping[relativePath];
+    
+    // 如果新的缩略图文件已存在，直接使用
+    if (await fs.pathExists(newThumbnailPath)) {
+      console.log('使用现有缩略图:', newThumbnailPath);
+      
+      // 更新映射（如果需要）
+      if (existingMD5 !== fileMD5) {
+        thumbnailMapping[relativePath] = fileMD5;
+        await saveThumbnailMapping(thumbnailMapping);
+      }
+      
+      return {
+        success: true,
+        thumbnailPath: newThumbnailPath,
+        cached: true
+      };
+    }
+    
+    // 如果存在旧的缩略图文件，删除它
+    if (existingMD5 && existingMD5 !== fileMD5) {
+      const oldThumbnailPath = path.join(cacheDir, `${existingMD5}.png`);
+      try {
+        if (await fs.pathExists(oldThumbnailPath)) {
+          await fs.unlink(oldThumbnailPath);
+          console.log('删除旧缩略图:', oldThumbnailPath);
+        }
+      } catch (error) {
+        console.log('删除旧缩略图失败:', error);
+      }
+    }
+    
+    // 生成新的缩略图
+    const success = await convertPPTToImage(filePath, newThumbnailPath);
+    
+    if (success && await fs.pathExists(newThumbnailPath)) {
+      // 更新映射
+      thumbnailMapping[relativePath] = fileMD5;
+      await saveThumbnailMapping(thumbnailMapping);
+      
+      return {
+        success: true,
+        thumbnailPath: newThumbnailPath,
+        cached: false
+      };
+    } else {
+      return {
+        success: false,
+        error: 'LibreOffice转换失败'
+      };
+    }
+    
+  } catch (error) {
+    console.error('获取缩略图失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 }
 
 // 使用LibreOffice将PPT转换为图片
