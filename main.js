@@ -34,7 +34,7 @@ function createWindow() {
   
   // 计算窗口大小为屏幕的3/4
   const windowWidth = Math.floor(screenWidth * 0.75);
-  const windowHeight = Math.floor(screenHeight * 0.75);
+  const windowHeight = Math.floor(screenHeight * 0.85);
   
   // 设置最小和最大尺寸限制
   const minWidth = 1000;
@@ -444,23 +444,22 @@ ipcMain.handle('get-ppt-preview', async (event, filePath) => {
           };
         }
         
-        // 使用新的缩略图管理策略
-        const thumbnailResult = await getThumbnailForFile(filePath);
+        // 使用新的PDF转换策略
+        const pdfResult = await getThumbnailForFile(filePath);
         
-        if (thumbnailResult.success) {
-          console.log('获取缩略图成功:', thumbnailResult.cached ? '使用缓存' : '新生成');
-          const imageData = fs.readFileSync(thumbnailResult.thumbnailPath);
+        if (pdfResult.success) {
+          console.log('获取PDF成功:', pdfResult.cached ? '使用缓存' : '新生成');
           return {
             success: true,
-            data: `data:image/png;base64,${imageData.toString('base64')}`,
-            cached: thumbnailResult.cached
+            pdfPath: pdfResult.pdfPath,
+            cached: pdfResult.cached
           };
         } else {
-          console.log('获取缩略图失败:', thumbnailResult.error);
+          console.log('获取PDF失败:', pdfResult.error);
           return {
             success: false,
-            error: thumbnailResult.error,
-            svg: generateErrorSVG(thumbnailResult.error)
+            error: pdfResult.error,
+            svg: generateErrorSVG(pdfResult.error)
           };
         }
       } finally {
@@ -1518,8 +1517,8 @@ async function getThumbnailForFile(filePath) {
     const cacheDir = getActualCachePath();
     await fs.ensureDir(cacheDir);
     
-    // 新的缩略图文件路径（使用MD5作为文件名）
-    const newThumbnailPath = path.join(cacheDir, `${fileMD5}.png`);
+    // 新的PDF文件路径（使用MD5作为文件名）
+    const newPDFPath = path.join(cacheDir, `${fileMD5}.pdf`);
     
     // 读取缩略图映射
     const thumbnailMapping = await readThumbnailMapping();
@@ -1528,9 +1527,9 @@ async function getThumbnailForFile(filePath) {
     const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
     const existingMD5 = thumbnailMapping[relativePath];
     
-    // 如果新的缩略图文件已存在，直接使用
-    if (await fs.pathExists(newThumbnailPath)) {
-      console.log('使用现有缩略图:', newThumbnailPath);
+    // 如果新的PDF文件已存在，直接使用
+    if (await fs.pathExists(newPDFPath)) {
+      console.log('使用现有PDF:', newPDFPath);
       
       // 更新映射（如果需要）
       if (existingMD5 !== fileMD5) {
@@ -1540,35 +1539,35 @@ async function getThumbnailForFile(filePath) {
       
       return {
         success: true,
-        thumbnailPath: newThumbnailPath,
+        pdfPath: newPDFPath,
         cached: true
       };
     }
     
-    // 如果存在旧的缩略图文件，删除它
+    // 如果存在旧的PDF文件，删除它
     if (existingMD5 && existingMD5 !== fileMD5) {
-      const oldThumbnailPath = path.join(cacheDir, `${existingMD5}.png`);
+      const oldPDFPath = path.join(cacheDir, `${existingMD5}.pdf`);
       try {
-        if (await fs.pathExists(oldThumbnailPath)) {
-          await fs.unlink(oldThumbnailPath);
-          console.log('删除旧缩略图:', oldThumbnailPath);
+        if (await fs.pathExists(oldPDFPath)) {
+          await fs.unlink(oldPDFPath);
+          console.log('删除旧PDF:', oldPDFPath);
         }
       } catch (error) {
-        console.log('删除旧缩略图失败:', error);
+        console.log('删除旧PDF失败:', error);
       }
     }
     
-    // 生成新的缩略图
-    const success = await convertPPTToImage(filePath, newThumbnailPath);
+    // 生成新的PDF
+    const success = await convertPPTToPDF(filePath, newPDFPath);
     
-    if (success && await fs.pathExists(newThumbnailPath)) {
+    if (success && await fs.pathExists(newPDFPath)) {
       // 更新映射
       thumbnailMapping[relativePath] = fileMD5;
       await saveThumbnailMapping(thumbnailMapping);
       
       return {
         success: true,
-        thumbnailPath: newThumbnailPath,
+        pdfPath: newPDFPath,
         cached: false
       };
     } else {
@@ -1587,8 +1586,8 @@ async function getThumbnailForFile(filePath) {
   }
 }
 
-// 使用LibreOffice将PPT转换为图片
-async function convertPPTToImage(inputPath, outputPath) {
+// 使用LibreOffice将PPT转换为PDF
+async function convertPPTToPDF(inputPath, outputPath) {
   return new Promise((resolve) => {
     const soffPath = getLibreOfficePath();
     
@@ -1600,7 +1599,7 @@ async function convertPPTToImage(inputPath, outputPath) {
     
     // 构建LibreOffice命令参数
     const outputDir = path.dirname(outputPath);
-    const args = ['--headless', '--convert-to', 'png', '--outdir', outputDir, inputPath];
+    const args = ['--headless', '--convert-to', 'pdf', '--outdir', outputDir, inputPath];
     
     console.log('执行LibreOffice转换命令:', soffPath, args.join(' '));
     
@@ -1643,9 +1642,9 @@ async function convertPPTToImage(inputPath, outputPath) {
           console.warn('LibreOffice警告:', stderr);
         }
         
-        // LibreOffice会生成与输入文件同名的png文件
+        // LibreOffice会生成与输入文件同名的pdf文件
         const baseName = path.basename(inputPath, path.extname(inputPath));
-        const generatedPath = path.join(outputDir, `${baseName}.png`);
+        const generatedPath = path.join(outputDir, `${baseName}.pdf`);
         
         try {
           // 如果生成的文件存在，重命名为我们期望的文件名

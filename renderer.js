@@ -96,6 +96,7 @@ const tagSuggestions = document.getElementById('tagSuggestions');
 const previewModal = document.getElementById('previewModal');
 const closePreviewBtn = document.getElementById('closePreview');
 const previewImage = document.getElementById('previewImage');
+const previewPDF = document.getElementById('previewPDF');
 const previewFileName = document.getElementById('previewFileName');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
@@ -294,19 +295,7 @@ document.getElementById('retryPreviewBtn').addEventListener('click', retryPrevie
         }
     });
     
-    // 预览模态框鼠标滚轮事件
-    previewModal.addEventListener('wheel', (e) => {
-        if (!previewModal.classList.contains('hidden')) {
-            e.preventDefault();
-            if (e.deltaY > 0) {
-                // 向下滚动，显示下一张
-                showNextPreview();
-            } else {
-                // 向上滚动，显示上一张
-                showPrevPreview();
-            }
-        }
-    });
+    // 预览模态框鼠标滚轮事件已移除，不再支持滚轮切换预览
     
     // 帮助按钮事件
     helpBtn.addEventListener('click', showHelpModal);
@@ -1027,6 +1016,7 @@ async function showPreview() {
     // 显示加载状态
     previewLoading.classList.remove('hidden');
     previewImage.classList.add('hidden');
+    previewPDF.classList.add('hidden');
     
     // 显示模态框
     previewModal.classList.remove('hidden');
@@ -1075,10 +1065,11 @@ function displayPreviewResult(result, filePath) {
         return; // 不是当前预览的文件，忽略结果
     }
     
-    if (result.success) {
-        // 成功获取图片预览
-        previewImage.src = result.data;
-        previewImage.classList.remove('hidden');
+    if (result.success && result.pdfPath) {
+        // 成功获取PDF预览
+        previewPDF.src = `file://${result.pdfPath}`;
+        previewPDF.classList.remove('hidden');
+        previewImage.classList.add('hidden');
         hideRetryButton();
     } else if (result.svg) {
         // 显示SVG（安装提示或错误信息）
@@ -1086,12 +1077,14 @@ function displayPreviewResult(result, filePath) {
         const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`;
         previewImage.src = svgDataUrl;
         previewImage.classList.remove('hidden');
+        previewPDF.classList.add('hidden');
         showRetryButton();
     } else {
         // 其他错误情况
         previewImage.src = '';
         previewImage.alt = result.error || '无法生成预览';
         previewImage.classList.remove('hidden');
+        previewPDF.classList.add('hidden');
         showRetryButton();
     }
 }
@@ -1254,6 +1247,9 @@ function closePreviewModal() {
     previewModal.classList.add('hidden');
     hideRetryButton();
     previewImage.src = '';
+    previewPDF.src = '';
+    previewPDF.classList.add('hidden');
+    previewImage.classList.add('hidden');
     currentPreviewIndex = 0;
     previewFiles = [];
     // 清理预览缓存以释放内存

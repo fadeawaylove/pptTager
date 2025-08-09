@@ -188,8 +188,8 @@
         <div class="bg-gray-800 rounded-lg w-[95vw] h-[95vh] max-w-none flex flex-col text-white">
             
             <!-- Header区域：固定高度，不会被遮挡 -->
-            <header class="flex-shrink-0 bg-gray-900 border-b border-gray-700 rounded-t-lg px-5 py-3">
-                <div class="flex justify-between items-center min-h-[60px] w-full">
+            <header class="flex-shrink-0 bg-gray-900 border-b border-gray-700 rounded-t-lg px-5 py-2">
+                <div class="flex justify-between items-center min-h-[40px] w-full">
                     <div class="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
                         <h3 id="previewFileName" class="text-white text-base font-semibold max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis flex-shrink-0" title="">文件名</h3>
                         <div class="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
@@ -211,13 +211,16 @@
                 <!-- 导航按钮：绝对定位在body内 -->
                 <button id="prevBtn" class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 text-white/80 border-0 w-12 h-12 rounded-full text-2xl font-bold cursor-pointer z-10 transition-all duration-300 flex items-center justify-center backdrop-blur-sm shadow-xl opacity-70 border border-white/20 hover:bg-black/70 hover:text-white hover:scale-110 hover:opacity-100 hover:border-white/50 hover:shadow-2xl disabled:bg-black/20 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none disabled:opacity-30" title="上一个">‹</button>
                 
-                <!-- 图片容器：在body内居中显示，确保不溢出 -->
+                <!-- 预览容器：在body内居中显示，确保不溢出 -->
                 <div class="w-full h-full flex items-center justify-center p-4">
                     <div id="previewLoading" class="preview-loading hidden flex flex-col items-center gap-5 text-gray-400">
                         <div class="loading-spinner"></div>
                         <p>正在生成预览...</p>
                     </div>
-                    <img id="previewImage" class="max-w-full max-h-full w-auto h-auto object-contain rounded shadow-2xl" alt="PPT预览" />
+                    <!-- PDF预览容器 -->
+                    <embed id="previewPDF" class="max-w-full max-h-full w-full h-full rounded shadow-2xl hidden" type="application/pdf" />
+                    <!-- 图片预览容器（用于错误提示SVG） -->
+                    <img id="previewImage" class="max-w-full max-h-full w-auto h-auto object-contain rounded shadow-2xl hidden" alt="PPT预览" />
                 </div>
                 
                 <!-- 重新生成按钮 -->
