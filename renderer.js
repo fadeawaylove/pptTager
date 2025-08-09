@@ -15,12 +15,15 @@ let currentSuggestionIndex = -1;
 let availableTags = [];
 // 预览预加载缓存
 let previewCache = new Map();
+let currentPreviewTimer = null; // 当前预览检查定时器
 
 // 预览生成并发控制
 let activePreviewTasks = new Map(); // 正在进行的预览任务
 let previewTaskQueue = []; // 预览任务队列
 let maxConcurrentPreviews = 5; // 最大并发预览数量
 let isProcessingQueue = false; // 是否正在处理队列
+let currentMainPreviewPath = null; // 当前主预览文件路径
+let previewAbortControllers = new Map(); // 预览任务的中止控制器
 
 // DOM元素
 // selectFolderBtn已移除，选择文件夹功能已移至设置中
@@ -1006,6 +1009,19 @@ async function showPreview() {
     if (previewFiles.length === 0) return;
     
     const file = previewFiles[currentPreviewIndex];
+    
+    // 清除之前的定时器
+    if (currentPreviewTimer) {
+        clearInterval(currentPreviewTimer);
+        currentPreviewTimer = null;
+    }
+    
+    // 终止所有非当前预览的任务
+    terminateNonCurrentTasks(file.path);
+    
+    // 设置当前主预览路径
+    currentMainPreviewPath = file.path;
+    
     previewFileName.textContent = file.relativePath;
     previewFileName.title = file.relativePath; // 显示完整相对路径
     previewCounter.textContent = `${currentPreviewIndex + 1} / ${previewFiles.length}`;
@@ -1021,49 +1037,99 @@ async function showPreview() {
     // 显示模态框
     previewModal.classList.remove('hidden');
     
-    // 检查缓存中是否已有当前文件的预览
+    // 检查缓存中是否已有当前文件的成功预览
     if (previewCache.has(file.path)) {
         const cachedResult = previewCache.get(file.path);
-        displayPreviewResult(cachedResult, file.path);
-        previewLoading.classList.add('hidden');
-        
-        // 即使有缓存，也要预加载前后文件
-        preloadAdjacentPreviews();
-        
-        // 更新导航按钮状态
-        updateNavigationButtons();
-        return;
+        // 只有成功的结果才直接显示，失败的结果需要重新尝试
+        if (cachedResult.success && cachedResult.pdfPath) {
+            displayPreviewResult(cachedResult, file.path);
+            
+            // 即使有缓存，也要预加载前后文件
+            preloadAdjacentPreviews();
+            
+            // 更新导航按钮状态
+            updateNavigationButtons();
+            return;
+        } else {
+            // 清除失败的缓存，重新生成
+            previewCache.delete(file.path);
+        }
     }
     
-    try {
-        // 使用并发控制的预览请求（主预览，优先级高）
-        const result = await requestPreview(file.path, true);
-        
-        // 显示预览结果
-        displayPreviewResult(result, file.path);
-        
-        // 预加载前后一张PPT的预览
-        preloadAdjacentPreviews();
-        
-    } catch (error) {
+    // 启动预览生成请求（不等待结果）
+    requestPreview(file.path, true).catch(error => {
         console.error('获取预览失败:', error);
-        // 预览失败时显示重试按钮，而不是错误信息
-        showRetryButton();
-        previewImage.classList.add('hidden');
-    } finally {
-        previewLoading.classList.add('hidden');
-    }
+    });
+    
+    // 启动新的检查
+    checkPreviewFileGeneration(file.path);
+    
+    // 预加载前后一张PPT的预览
+    preloadAdjacentPreviews();
     
     // 更新导航按钮状态
     updateNavigationButtons();
 }
 
+// 检查预览文件生成状态的函数
+function checkPreviewFileGeneration(filePath) {
+    const startTime = Date.now();
+    const timeout = 30000; // 30秒超时
+    const checkInterval = 500; // 每500ms检查一次
+    
+    currentPreviewTimer = setInterval(async () => {
+        // 检查是否超时
+        if (Date.now() - startTime > timeout) {
+            clearInterval(currentPreviewTimer);
+            currentPreviewTimer = null;
+            // 超时显示失败提示（只有当前仍在预览该文件时才显示）
+            if (previewFiles.length > 0 && 
+                previewFiles[currentPreviewIndex].path === filePath &&
+                currentMainPreviewPath === filePath &&
+                !previewModal.classList.contains('hidden')) {
+                previewLoading.classList.add('hidden');
+                previewImage.src = '';
+                previewImage.alt = '预览生成超时，请重试';
+                previewImage.classList.remove('hidden');
+                previewPDF.classList.add('hidden');
+                showRetryButton();
+            }
+            return;
+        }
+        
+        // 检查缓存中是否有结果
+        if (previewCache.has(filePath)) {
+            clearInterval(currentPreviewTimer);
+            currentPreviewTimer = null;
+            const result = previewCache.get(filePath);
+            displayPreviewResult(result, filePath);
+            return;
+        }
+        
+        // 检查是否还在预览当前文件（更严格的检查）
+        if (previewFiles.length === 0 || 
+            previewFiles[currentPreviewIndex].path !== filePath ||
+            currentMainPreviewPath !== filePath ||
+            previewModal.classList.contains('hidden')) {
+            clearInterval(currentPreviewTimer);
+            currentPreviewTimer = null;
+            return;
+        }
+    }, checkInterval);
+}
+
 // 显示预览结果的辅助函数
 function displayPreviewResult(result, filePath) {
     // 只有当前正在预览的文件才能更新显示
-    if (previewFiles.length > 0 && previewFiles[currentPreviewIndex].path !== filePath) {
+    if (previewFiles.length === 0 || 
+        previewFiles[currentPreviewIndex].path !== filePath ||
+        currentMainPreviewPath !== filePath ||
+        previewModal.classList.contains('hidden')) {
         return; // 不是当前预览的文件，忽略结果
     }
+    
+    // 隐藏加载状态
+    previewLoading.classList.add('hidden');
     
     if (result.success && result.pdfPath) {
         // 成功获取PDF预览
@@ -1252,6 +1318,15 @@ function closePreviewModal() {
     previewImage.classList.add('hidden');
     currentPreviewIndex = 0;
     previewFiles = [];
+    // 清除预览检查定时器
+    if (currentPreviewTimer) {
+        clearInterval(currentPreviewTimer);
+        currentPreviewTimer = null;
+    }
+    // 清除当前主预览路径
+    currentMainPreviewPath = null;
+    // 终止所有预览任务
+    terminateAllPreviewTasks();
     // 清理预览缓存以释放内存
     clearPreviewCache();
 }
@@ -1259,6 +1334,27 @@ function closePreviewModal() {
 // 清理预览缓存的函数
 function clearPreviewCache() {
     previewCache.clear();
+}
+
+// 终止所有预览任务
+function terminateAllPreviewTasks() {
+    // 清空任务队列并拒绝所有等待的任务
+    previewTaskQueue.forEach(task => {
+        task.reject(new Error('预览已关闭'));
+    });
+    previewTaskQueue = [];
+    
+    // 终止所有活动任务
+    for (const [filePath, promise] of activePreviewTasks.entries()) {
+        if (previewAbortControllers.has(filePath)) {
+            previewAbortControllers.get(filePath).abort();
+            previewAbortControllers.delete(filePath);
+        }
+    }
+    activePreviewTasks.clear();
+    
+    // 清理所有中止控制器
+    previewAbortControllers.clear();
 }
 
 // 预览任务队列管理
@@ -1291,11 +1387,27 @@ async function executePreviewTask(task) {
         return;
     }
     
+    // 创建 AbortController 用于任务取消
+    const abortController = new AbortController();
+    previewAbortControllers.set(filePath, abortController);
+    
     // 创建预览任务Promise
     const previewPromise = (async () => {
         try {
             console.log(`开始生成预览: ${filePath}`);
+            
+            // 检查是否已被取消
+            if (abortController.signal.aborted) {
+                throw new Error('任务已被取消');
+            }
+            
+            // 注意：由于 IPC 调用不支持 AbortSignal，我们只能在调用前后检查取消状态
             const result = await ipcRenderer.invoke('get-ppt-preview', filePath);
+            
+            // 再次检查是否已被取消（在 IPC 调用完成后）
+            if (abortController.signal.aborted) {
+                throw new Error('任务已被取消');
+            }
             
             // 缓存预览结果
             previewCache.set(filePath, result);
@@ -1303,11 +1415,16 @@ async function executePreviewTask(task) {
             console.log(`预览生成完成: ${filePath}`);
             return result;
         } catch (error) {
+            if (abortController.signal.aborted || error.message === '任务已被取消') {
+                console.log(`预览任务已取消: ${filePath}`);
+                throw new Error('任务已被取消');
+            }
             console.error(`预览生成失败: ${filePath}`, error);
             throw error;
         } finally {
-            // 任务完成后从活动任务中移除
+            // 任务完成后清理
             activePreviewTasks.delete(filePath);
+            previewAbortControllers.delete(filePath);
             // 继续处理队列中的其他任务
             processPreviewQueue();
         }
@@ -1324,6 +1441,55 @@ async function executePreviewTask(task) {
     }
 }
 
+// 终止所有非当前预览的任务
+function terminateNonCurrentTasks(currentFilePath) {
+    // 清理队列中的非当前任务和非相邻预加载任务
+    const adjacentFiles = getAdjacentFiles(currentFilePath);
+    const allowedFiles = new Set([currentFilePath, ...adjacentFiles]);
+    
+    // 过滤队列，只保留当前预览和相邻文件的任务
+    previewTaskQueue = previewTaskQueue.filter(task => {
+        if (allowedFiles.has(task.filePath)) {
+            return true;
+        }
+        // 拒绝非允许的任务
+        task.reject(new Error('任务被新预览请求终止'));
+        return false;
+    });
+    
+    // 终止活动任务中的非允许任务
+    for (const [filePath, promise] of activePreviewTasks.entries()) {
+        if (!allowedFiles.has(filePath)) {
+            // 如果有中止控制器，使用它来中止任务
+            if (previewAbortControllers.has(filePath)) {
+                previewAbortControllers.get(filePath).abort();
+                previewAbortControllers.delete(filePath);
+            }
+            activePreviewTasks.delete(filePath);
+        }
+    }
+}
+
+// 获取相邻文件路径（用于预加载）
+function getAdjacentFiles(currentFilePath) {
+    if (previewFiles.length <= 1) return [];
+    
+    const currentIndex = previewFiles.findIndex(f => f.path === currentFilePath);
+    if (currentIndex === -1) return [];
+    
+    const adjacentFiles = [];
+    
+    // 前一张
+    const prevIndex = currentIndex === 0 ? previewFiles.length - 1 : currentIndex - 1;
+    adjacentFiles.push(previewFiles[prevIndex].path);
+    
+    // 后一张
+    const nextIndex = currentIndex === previewFiles.length - 1 ? 0 : currentIndex + 1;
+    adjacentFiles.push(previewFiles[nextIndex].path);
+    
+    return adjacentFiles;
+}
+
 // 请求预览（带并发控制）
 function requestPreview(filePath, isMainPreview = false) {
     return new Promise((resolve, reject) => {
@@ -1333,14 +1499,44 @@ function requestPreview(filePath, isMainPreview = false) {
             return;
         }
         
+        // 如果是主预览请求，检查是否需要清理非相关任务
+        if (isMainPreview && currentMainPreviewPath !== filePath) {
+            terminateNonCurrentTasks(filePath);
+        }
+        
+        // 检查任务是否被允许（只允许当前预览和相邻文件）
+        if (!isMainPreview && currentMainPreviewPath) {
+            const adjacentFiles = getAdjacentFiles(currentMainPreviewPath);
+            const allowedFiles = new Set([currentMainPreviewPath, ...adjacentFiles]);
+            if (!allowedFiles.has(filePath)) {
+                reject(new Error('任务不在允许范围内'));
+                return;
+            }
+        }
+        
         // 检查是否已有相同任务在队列中
         const existingTaskIndex = previewTaskQueue.findIndex(task => task.filePath === filePath);
         if (existingTaskIndex !== -1) {
+            const existingTask = previewTaskQueue[existingTaskIndex];
+            // 将当前请求的resolve和reject添加到现有任务中
+            const originalResolve = existingTask.resolve;
+            const originalReject = existingTask.reject;
+            
+            existingTask.resolve = (result) => {
+                originalResolve(result);
+                resolve(result);
+            };
+            
+            existingTask.reject = (error) => {
+                originalReject(error);
+                reject(error);
+            };
+            
             // 如果是主预览请求，提升优先级
             if (isMainPreview) {
-                const existingTask = previewTaskQueue[existingTaskIndex];
                 previewTaskQueue.splice(existingTaskIndex, 1);
                 previewTaskQueue.unshift(existingTask);
+                existingTask.isMainPreview = true;
             }
             return;
         }
