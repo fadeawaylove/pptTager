@@ -4,6 +4,23 @@
     --scale-factor: 1;
 }
 
+/* PDF预览优化样式 */
+#previewPDF {
+    /* 硬件加速，提升渲染性能 */
+    transform: translateZ(0);
+    will-change: transform;
+    /* 平滑过渡效果 */
+    transition: opacity 0.3s ease-in-out;
+    /* 优化字体渲染 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* 避免选择文本时的性能问题 */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
 html {
     font-size: var(--base-font-size);
 }

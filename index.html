@@ -135,6 +135,10 @@
                         <p class="flex justify-between"><span>当前显示:</span> <span id="filteredFiles" class="font-medium text-purple-600">0</span></p>
                     </div>
                 </div>
+                
+                <div class="file-monitoring mt-8">
+                    <!-- 文件监控功能已移除 -->
+                </div>
             </div>
 
             <div class="content flex-1 p-5 overflow-y-auto bg-gray-50">
@@ -218,7 +222,7 @@
                         <p>正在生成预览...</p>
                     </div>
                     <!-- PDF预览容器 -->
-                    <embed id="previewPDF" class="max-w-full max-h-full w-full h-full rounded shadow-2xl hidden" type="application/pdf" />
+                    <webview id="previewPDF" class="max-w-full max-h-full w-full h-full rounded shadow-2xl hidden" style="background: #f5f5f5;" allowpopups></webview>
                     <!-- 图片预览容器（用于错误提示SVG） -->
                     <img id="previewImage" class="max-w-full max-h-full w-auto h-auto object-contain rounded shadow-2xl hidden" alt="PPT预览" />
                 </div>

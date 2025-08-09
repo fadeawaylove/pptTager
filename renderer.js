@@ -20,10 +20,21 @@ let currentPreviewTimer = null; // 当前预览检查定时器
 // 预览生成并发控制
 let activePreviewTasks = new Map(); // 正在进行的预览任务
 let previewTaskQueue = []; // 预览任务队列
-let maxConcurrentPreviews = 5; // 最大并发预览数量
+let maxConcurrentPreviews = 3; // 最大并发预览数量（优化：降低并发数以减少卡顿）
 let isProcessingQueue = false; // 是否正在处理队列
 let currentMainPreviewPath = null; // 当前主预览文件路径
 let previewAbortControllers = new Map(); // 预览任务的中止控制器
+
+// 文件监控相关变量
+let isFileWatchingEnabled = false;
+let backgroundTaskStatus = {
+  queueLength: 0,
+  activeTasks: 0,
+  maxConcurrent: 2,
+  isSystemBusy: false,
+  watchedFolder: null
+};
+let statusUpdateInterval = null;
 
 // DOM元素
 // selectFolderBtn已移除，选择文件夹功能已移至设置中
@@ -484,6 +495,11 @@ async function selectFolder() {
         tagsData = await ipcRenderer.invoke('load-tags', currentFolder) || {};
         
         await scanFiles();
+        
+        // 如果文件监控已启用，启动监控
+        if (isFileWatchingEnabled && fileWatchToggle && fileWatchToggle.checked) {
+            await startFileWatching();
+        }
     }
 }
 
@@ -1044,8 +1060,8 @@ async function showPreview() {
         if (cachedResult.success && cachedResult.pdfPath) {
             displayPreviewResult(cachedResult, file.path);
             
-            // 即使有缓存，也要预加载前后文件
-            preloadAdjacentPreviews();
+            // 预加载功能已禁用
+            // preloadAdjacentPreviews();
             
             // 更新导航按钮状态
             updateNavigationButtons();
@@ -1064,8 +1080,8 @@ async function showPreview() {
     // 启动新的检查
     checkPreviewFileGeneration(file.path);
     
-    // 预加载前后一张PPT的预览
-    preloadAdjacentPreviews();
+    // 预加载功能已禁用
+    // preloadAdjacentPreviews();
     
     // 更新导航按钮状态
     updateNavigationButtons();
@@ -1119,7 +1135,7 @@ function checkPreviewFileGeneration(filePath) {
 }
 
 // 显示预览结果的辅助函数
-function displayPreviewResult(result, filePath) {
+async function displayPreviewResult(result, filePath) {
     // 只有当前正在预览的文件才能更新显示
     if (previewFiles.length === 0 || 
         previewFiles[currentPreviewIndex].path !== filePath ||
@@ -1133,10 +1149,45 @@ function displayPreviewResult(result, filePath) {
     
     if (result.success && result.pdfPath) {
         // 成功获取PDF预览
-        previewPDF.src = `file://${result.pdfPath}`;
-        previewPDF.classList.remove('hidden');
-        previewImage.classList.add('hidden');
-        hideRetryButton();
+        // 读取PDF文件内容到内存，避免锁定原始文件
+        try {
+            const pdfResult = await ipcRenderer.invoke('read-pdf-as-base64', result.pdfPath);
+            
+            if (pdfResult.success) {
+                // 使用base64 data URL加载PDF，避免文件锁定
+                const pdfDataUrl = `data:${pdfResult.mimeType};base64,${pdfResult.base64Data}`;
+                
+                // 添加webview加载事件监听
+                previewPDF.addEventListener('dom-ready', function onDomReady() {
+                    previewPDF.removeEventListener('dom-ready', onDomReady);
+                    previewPDF.classList.remove('hidden');
+                    previewImage.classList.add('hidden');
+                });
+                
+                // 添加错误处理
+                previewPDF.addEventListener('did-fail-load', function onFailLoad() {
+                    previewPDF.removeEventListener('did-fail-load', onFailLoad);
+                    console.warn('PDF加载失败，尝试直接显示');
+                    previewPDF.classList.remove('hidden');
+                    previewImage.classList.add('hidden');
+                });
+                
+                // 设置webview的src来加载PDF（使用data URL）
+                previewPDF.src = pdfDataUrl;
+                
+                hideRetryButton();
+            } else {
+                throw new Error(pdfResult.error || '读取PDF文件失败');
+            }
+        } catch (error) {
+            console.error('加载PDF预览失败:', error);
+            // 降级到错误显示
+            previewImage.src = '';
+            previewImage.alt = '无法加载PDF预览: ' + error.message;
+            previewImage.classList.remove('hidden');
+            previewPDF.classList.add('hidden');
+            showRetryButton();
+        }
     } else if (result.svg) {
         // 显示SVG（安装提示或错误信息）
         // 使用encodeURIComponent来安全处理包含Unicode字符的SVG
@@ -1162,52 +1213,52 @@ function updateNavigationButtons() {
     nextBtn.disabled = !hasMultipleFiles;
 }
 
-// 预加载前后一张PPT预览的函数
-async function preloadAdjacentPreviews() {
-    if (previewFiles.length <= 1) return;
-    
-    const preloadTasks = [];
-    
-    // 计算前一张的索引（循环）
-    const prevIndex = currentPreviewIndex === 0 ? previewFiles.length - 1 : currentPreviewIndex - 1;
-    const prevFile = previewFiles[prevIndex];
-    
-    // 计算后一张的索引（循环）
-    const nextIndex = currentPreviewIndex === previewFiles.length - 1 ? 0 : currentPreviewIndex + 1;
-    const nextFile = previewFiles[nextIndex];
-    
-    // 预加载前一张（如果未缓存）
-    if (!previewCache.has(prevFile.path)) {
-        preloadTasks.push(preloadSinglePreview(prevFile.path));
-    }
-    
-    // 预加载后一张（如果未缓存）
-    if (!previewCache.has(nextFile.path)) {
-        preloadTasks.push(preloadSinglePreview(nextFile.path));
-    }
-    
-    // 并行执行预加载任务
-    if (preloadTasks.length > 0) {
-        Promise.allSettled(preloadTasks).then(results => {
-            const successCount = results.filter(r => r.status === 'fulfilled').length;
-            if (successCount > 0) {
-                console.log(`成功预加载 ${successCount} 个预览`);
-            }
-        });
-    }
-}
+// 预加载前后一张PPT预览的函数（已禁用）
+// async function preloadAdjacentPreviews() {
+//     if (previewFiles.length <= 1) return;
+//     
+//     const preloadTasks = [];
+//     
+//     // 计算前一张的索引（循环）
+//     const prevIndex = currentPreviewIndex === 0 ? previewFiles.length - 1 : currentPreviewIndex - 1;
+//     const prevFile = previewFiles[prevIndex];
+//     
+//     // 计算后一张的索引（循环）
+//     const nextIndex = currentPreviewIndex === previewFiles.length - 1 ? 0 : currentPreviewIndex + 1;
+//     const nextFile = previewFiles[nextIndex];
+//     
+//     // 预加载前一张（如果未缓存）
+//     if (!previewCache.has(prevFile.path)) {
+//         preloadTasks.push(preloadSinglePreview(prevFile.path));
+//     }
+//     
+//     // 预加载后一张（如果未缓存）
+//     if (!previewCache.has(nextFile.path)) {
+//         preloadTasks.push(preloadSinglePreview(nextFile.path));
+//     }
+//     
+//     // 并行执行预加载任务
+//     if (preloadTasks.length > 0) {
+//         Promise.allSettled(preloadTasks).then(results => {
+//             const successCount = results.filter(r => r.status === 'fulfilled').length;
+//             if (successCount > 0) {
+//                 console.log(`成功预加载 ${successCount} 个预览`);
+//             }
+//         });
+//     }
+// }
 
-// 预加载单个预览的函数
-async function preloadSinglePreview(filePath) {
-    try {
-        // 使用并发控制的预览请求（预加载，优先级低）
-        const result = await requestPreview(filePath, false);
-        return result;
-    } catch (error) {
-        console.error('预加载预览失败:', filePath, error);
-        throw error;
-    }
-}
+// 预加载单个预览的函数（已禁用）
+// async function preloadSinglePreview(filePath) {
+//     try {
+//         // 使用并发控制的预览请求（预加载，优先级低）
+//         const result = await requestPreview(filePath, false);
+//         return result;
+//     } catch (error) {
+//         console.error('预加载预览失败:', filePath, error);
+//         throw error;
+//     }
+// }
 
 function showPrevPreview() {
     if (previewFiles.length <= 1) return;
@@ -1312,23 +1363,39 @@ async function retryPreview() {
 function closePreviewModal() {
     previewModal.classList.add('hidden');
     hideRetryButton();
+    
+    // 清理webview资源
+    setTimeout(() => {
+        if (previewModal.classList.contains('hidden')) {
+            previewPDF.src = '';
+            // webview元素会在src清空时自动清理资源
+        }
+    }, 100);
+    
     previewImage.src = '';
-    previewPDF.src = '';
     previewPDF.classList.add('hidden');
     previewImage.classList.add('hidden');
     currentPreviewIndex = 0;
     previewFiles = [];
+    
     // 清除预览检查定时器
     if (currentPreviewTimer) {
         clearInterval(currentPreviewTimer);
         currentPreviewTimer = null;
     }
+    
     // 清除当前主预览路径
     currentMainPreviewPath = null;
+    
     // 终止所有预览任务
     terminateAllPreviewTasks();
-    // 清理预览缓存以释放内存
-    clearPreviewCache();
+    
+    // 优化：智能缓存清理 - 只保留最近的10个预览缓存
+    if (previewCache.size > 10) {
+        const entries = Array.from(previewCache.entries());
+        const toDelete = entries.slice(0, entries.length - 10);
+        toDelete.forEach(([key]) => previewCache.delete(key));
+    }
 }
 
 // 清理预览缓存的函数
@@ -1443,11 +1510,10 @@ async function executePreviewTask(task) {
 
 // 终止所有非当前预览的任务
 function terminateNonCurrentTasks(currentFilePath) {
-    // 清理队列中的非当前任务和非相邻预加载任务
-    const adjacentFiles = getAdjacentFiles(currentFilePath);
-    const allowedFiles = new Set([currentFilePath, ...adjacentFiles]);
+    // 清理队列中的非当前任务
+    const allowedFiles = new Set([currentFilePath]);
     
-    // 过滤队列，只保留当前预览和相邻文件的任务
+    // 过滤队列，只保留当前预览的任务
     previewTaskQueue = previewTaskQueue.filter(task => {
         if (allowedFiles.has(task.filePath)) {
             return true;
@@ -1470,25 +1536,7 @@ function terminateNonCurrentTasks(currentFilePath) {
     }
 }
 
-// 获取相邻文件路径（用于预加载）
-function getAdjacentFiles(currentFilePath) {
-    if (previewFiles.length <= 1) return [];
-    
-    const currentIndex = previewFiles.findIndex(f => f.path === currentFilePath);
-    if (currentIndex === -1) return [];
-    
-    const adjacentFiles = [];
-    
-    // 前一张
-    const prevIndex = currentIndex === 0 ? previewFiles.length - 1 : currentIndex - 1;
-    adjacentFiles.push(previewFiles[prevIndex].path);
-    
-    // 后一张
-    const nextIndex = currentIndex === previewFiles.length - 1 ? 0 : currentIndex + 1;
-    adjacentFiles.push(previewFiles[nextIndex].path);
-    
-    return adjacentFiles;
-}
+
 
 // 请求预览（带并发控制）
 function requestPreview(filePath, isMainPreview = false) {
@@ -1504,14 +1552,10 @@ function requestPreview(filePath, isMainPreview = false) {
             terminateNonCurrentTasks(filePath);
         }
         
-        // 检查任务是否被允许（只允许当前预览和相邻文件）
-        if (!isMainPreview && currentMainPreviewPath) {
-            const adjacentFiles = getAdjacentFiles(currentMainPreviewPath);
-            const allowedFiles = new Set([currentMainPreviewPath, ...adjacentFiles]);
-            if (!allowedFiles.has(filePath)) {
-                reject(new Error('任务不在允许范围内'));
-                return;
-            }
+        // 预加载功能已禁用，只允许主预览任务
+        if (!isMainPreview) {
+            reject(new Error('预加载功能已禁用'));
+            return;
         }
         
         // 检查是否已有相同任务在队列中
@@ -2858,6 +2902,152 @@ document.addEventListener('click', async (event) => {
         event.preventDefault();
         showGithubGuideModal();
     }
+});
+
+// 文件监控功能实现
+
+// 获取文件监控相关的DOM元素
+const fileWatchToggle = document.getElementById('fileWatchToggle');
+const queueLengthEl = document.getElementById('queueLength');
+const activeTasksEl = document.getElementById('activeTasks');
+const systemStatusEl = document.getElementById('systemStatus');
+
+// 初始化文件监控功能（已禁用）
+function initFileMonitoring() {
+    // 文件监控功能已禁用
+    console.log('文件监控功能已禁用');
+    
+    // 隐藏文件监控开关
+    if (fileWatchToggle) {
+        fileWatchToggle.style.display = 'none';
+        const toggleContainer = fileWatchToggle.closest('.toggle-container');
+        if (toggleContainer) {
+            toggleContainer.style.display = 'none';
+        }
+    }
+    
+    // 不再监听后台PDF生成完成事件
+    // ipcRenderer.on('background-pdf-generated', (event, data) => {
+    //     console.log('后台PDF生成完成:', data);
+    //     // 可以在这里添加UI提示或更新文件状态
+    // });
+}
+
+// 切换文件监控状态（已禁用）
+async function toggleFileWatching(enabled) {
+    // 文件监控功能已禁用
+    console.log('文件监控功能已禁用，无法切换状态');
+    if (fileWatchToggle) {
+        fileWatchToggle.checked = false;
+    }
+    showNotification('文件监控功能已禁用', 'info');
+}
+
+// 启动状态更新
+function startStatusUpdates() {
+    // 每5秒更新一次状态
+    statusUpdateInterval = setInterval(async () => {
+        try {
+            const status = await ipcRenderer.invoke('get-background-task-status');
+            updateStatusDisplay(status);
+        } catch (error) {
+            console.error('获取后台任务状态失败:', error);
+        }
+    }, 5000);
+}
+
+// 停止状态更新
+function stopStatusUpdates() {
+    if (statusUpdateInterval) {
+        clearInterval(statusUpdateInterval);
+        statusUpdateInterval = null;
+    }
+}
+
+// 更新状态显示
+function updateStatusDisplay(status) {
+    backgroundTaskStatus = status;
+    
+    if (queueLengthEl) {
+        queueLengthEl.textContent = status.queueLength;
+    }
+    
+    if (activeTasksEl) {
+        activeTasksEl.textContent = `${status.activeTasks}/${status.maxConcurrent}`;
+    }
+    
+    if (systemStatusEl) {
+        if (status.isSystemBusy) {
+            systemStatusEl.textContent = '繁忙';
+            systemStatusEl.className = 'text-yellow-600';
+        } else {
+            systemStatusEl.textContent = '空闲';
+            systemStatusEl.className = 'text-green-600';
+        }
+    }
+    
+    // 更新开关状态
+    if (fileWatchToggle && status.watchedFolder) {
+        fileWatchToggle.checked = true;
+        isFileWatchingEnabled = true;
+    }
+}
+
+// 显示通知
+function showNotification(message, type = 'info') {
+    // 创建通知元素
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full`;
+    
+    // 根据类型设置样式
+    switch (type) {
+        case 'success':
+            notification.className += ' bg-green-500 text-white';
+            break;
+        case 'error':
+            notification.className += ' bg-red-500 text-white';
+            break;
+        case 'warning':
+            notification.className += ' bg-yellow-500 text-white';
+            break;
+        default:
+            notification.className += ' bg-blue-500 text-white';
+    }
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // 显示动画
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // 自动隐藏
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// 在文件夹选择时启动监控
+function onFolderSelected(folderPath) {
+    currentFolder = folderPath;
+    
+    // 文件监控功能已移除
+}
+
+// 页面卸载时清理
+window.addEventListener('beforeunload', () => {
+    stopStatusUpdates();
+});
+
+// 文件监控功能已移除
+document.addEventListener('DOMContentLoaded', () => {
+    // 初始化代码已移除
 });
 
 // 点击模态框背景关闭

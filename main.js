@@ -5,12 +5,15 @@ const { exec, spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
+// 移除了 chokidar 和 osUtils 依赖
 
 // 全局变量跟踪自动更新模式
 let isAutoUpdateMode = false;
 
 // 预览生成任务管理
 let activePreviewTasks = new Map(); // 正在进行的预览生成任务
+
+// 文件监控相关变量已移除
 
 let mainWindow;
 const DATA_FILE = path.join(app.getPath('userData'), 'ppt-tags.json');
@@ -56,7 +59,9 @@ function createWindow() {
     show: false, // 防止闪动，等内容加载完成后再显示
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false
+      contextIsolation: false,
+      webviewTag: true, // 启用webview支持
+      webSecurity: false // 允许加载本地文件
     },
     autoHideMenuBar: true,
     minWidth: minWidth,
@@ -115,6 +120,8 @@ function createWindow() {
       ]
     }
   ];
+  
+  // 文件监控系统已移除
   
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
@@ -220,11 +227,12 @@ async function scanPPTFilesRecursively(folderPath, basePath = folderPath) {
         pptFiles = pptFiles.concat(subFiles);
       } else if (item.isFile()) {
         const ext = path.extname(item.name).toLowerCase();
-        if (ext === '.ppt' || ext === '.pptx') {
+        // 过滤掉Office临时文件（以~$开头）
+        if ((ext === '.ppt' || ext === '.pptx') && !item.name.startsWith('~$')) {
           try {
             const stats = await fs.stat(fullPath);
-            // 过滤掉小于1KB的PPT文件
-            if (stats.size >= 1024) {
+            // 过滤掉小于2KB的PPT文件
+            if (stats.size >= 2048) {
               const relativePath = path.relative(basePath, fullPath);
               pptFiles.push({
                 name: item.name,
@@ -418,6 +426,53 @@ ipcMain.handle('select-target-folder', async () => {
   }
 });
 
+// 读取PDF文件内容为base64
+ipcMain.handle('read-pdf-as-base64', async (event, pdfPath) => {
+  try {
+    console.log('读取PDF文件为base64:', pdfPath);
+    
+    // 重试机制：最多重试3次，每次间隔500ms
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      // 检查文件是否存在
+      if (await fs.pathExists(pdfPath)) {
+        try {
+          // 读取文件内容
+          const fileBuffer = await fs.readFile(pdfPath);
+          const base64Data = fileBuffer.toString('base64');
+          
+          return {
+            success: true,
+            base64Data: base64Data,
+            mimeType: 'application/pdf'
+          };
+        } catch (readError) {
+          console.log(`读取PDF文件失败，重试 ${retryCount + 1}/${maxRetries}:`, readError.message);
+        }
+      } else {
+        console.log(`PDF文件不存在，重试 ${retryCount + 1}/${maxRetries}:`, pdfPath);
+      }
+      
+      retryCount++;
+      if (retryCount < maxRetries) {
+        // 等待500ms后重试
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    throw new Error('PDF文件不存在或读取失败');
+    
+  } catch (error) {
+    console.error('读取PDF文件失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
 // 获取PPT预览
 ipcMain.handle('get-ppt-preview', async (event, filePath) => {
   try {
@@ -568,6 +623,21 @@ function generateInstallPromptSVG() {
     <circle cx="80" cy="250" r="2" fill="white" opacity="0.4"/>
   </svg>`;
 }
+
+// 文件监控系统实现
+
+// 初始化文件监控系统
+
+
+
+
+
+
+
+
+
+
+
 
 // XML转义函数
 function escapeXml(unsafe) {
@@ -1503,7 +1573,19 @@ async function saveThumbnailMapping(mapping) {
   const mappingPath = getThumbnailMappingPath();
   try {
     await fs.ensureFile(mappingPath);
-    await fs.writeJson(mappingPath, mapping, { spaces: 2 });
+    
+    // 清理映射中的键，移除可能导致JSON解析错误的字符
+    const cleanedMapping = {};
+    for (const [key, value] of Object.entries(mapping)) {
+      // 移除换行符和其他控制字符
+      const cleanedKey = key.replace(/[\r\n\t]/g, '').trim();
+      if (cleanedKey) {
+        cleanedMapping[cleanedKey] = value;
+      }
+    }
+    
+    await fs.writeJson(mappingPath, cleanedMapping, { spaces: 2 });
+    console.log('缩略图映射已保存，条目数:', Object.keys(cleanedMapping).length);
   } catch (error) {
     console.error('保存缩略图映射失败:', error);
   }
