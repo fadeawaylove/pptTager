@@ -84,30 +84,52 @@ jobs:
       run: |
         echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
         
+    - name: Extract release notes from RELEASE.md
+      id: extract_notes
+      run: |
+        VERSION="v${{ steps.get_version.outputs.version }}"
+        
+        # 从RELEASE.md中提取对应版本的发布说明
+        if [ -f "RELEASE.md" ]; then
+          # 查找版本标题行
+          START_LINE=$(grep -n "^## $VERSION" RELEASE.md | head -1 | cut -d: -f1)
+          
+          if [ -n "$START_LINE" ]; then
+            # 查找下一个版本标题行（作为结束位置）
+            NEXT_VERSION_LINE=$(tail -n +$((START_LINE + 1)) RELEASE.md | grep -n "^## v" | head -1 | cut -d: -f1)
+            
+            if [ -n "$NEXT_VERSION_LINE" ]; then
+              # 计算实际的结束行号
+              END_LINE=$((START_LINE + NEXT_VERSION_LINE - 1))
+              # 提取版本说明（跳过版本标题行和分隔线）
+              RELEASE_NOTES=$(sed -n "$((START_LINE + 1)),$((END_LINE - 1))p" RELEASE.md | sed '/^---$/d' | sed '/^$/d' | sed 's/\\n/\n/g')
+            else
+              # 如果没有找到下一个版本，提取到文件末尾
+              RELEASE_NOTES=$(tail -n +$((START_LINE + 1)) RELEASE.md | sed '/^---$/d' | sed '/^$/d' | sed 's/\\n/\n/g')
+            fi
+            
+            # 如果提取的内容为空，使用默认说明
+            if [ -z "$RELEASE_NOTES" ]; then
+              RELEASE_NOTES="### 🎯 更新内容\n- 常规更新和优化\n- 修复已知问题\n- 提升用户体验"
+            fi
+          else
+            # 如果没有找到对应版本，使用默认说明
+            RELEASE_NOTES="### 🎯 更新内容\n- 常规更新和优化\n- 修复已知问题\n- 提升用户体验"
+          fi
+        else
+          # 如果RELEASE.md文件不存在，使用默认说明
+          RELEASE_NOTES="### 🎯 更新内容\n- 常规更新和优化\n- 修复已知问题\n- 提升用户体验"
+        fi
+        
+        # 将发布说明保存到输出文件
+        printf "%s\n\n### 📥 下载说明\n- **Windows**: 下载 .exe 文件直接安装\n- **macOS**: 下载 .dmg 文件安装\n- **Linux**: 下载 .AppImage 文件，添加执行权限后运行\n\n### 💻 系统要求\n- Windows 10/11 (64位)\n- macOS 10.15+ (64位)\n- Linux (64位)\n- 可选：LibreOffice（用于PPT预览功能）" "$RELEASE_NOTES" > release_notes.txt
+        
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         name: PPT标签管理器 v${{ steps.get_version.outputs.version }}
         tag_name: ${{ github.ref }}
-        body: |
-          ## PPT标签管理器 v${{ steps.get_version.outputs.version }}
-          
-          ### 新功能
-          - PPT文件标签管理
-          - 文件预览功能
-          - 智能缓存机制
-          - 现代化用户界面
-          
-          ### 下载说明
-          - **Windows**: 下载 `.exe` 文件直接安装
-          - **macOS**: 下载 `.dmg` 文件安装
-          - **Linux**: 下载 `.AppImage` 文件，添加执行权限后运行
-          
-          ### 系统要求
-          - Windows 10/11 (64位)
-          - macOS 10.15+ (64位)
-          - Linux (64位)
-          - 可选：LibreOffice（用于PPT预览功能）
+        body_path: release_notes.txt
         files: |
           windows-build/*
           macos-build/*
