@@ -1053,23 +1053,10 @@ async function showPreview() {
     // 显示模态框
     previewModal.classList.remove('hidden');
     
-    // 检查缓存中是否已有当前文件的成功预览
+    // 每次都重新请求预览，让main.js检查文件MD5是否变化
+    // 清除可能存在的旧缓存
     if (previewCache.has(file.path)) {
-        const cachedResult = previewCache.get(file.path);
-        // 只有成功的结果才直接显示，失败的结果需要重新尝试
-        if (cachedResult.success && cachedResult.pdfPath) {
-            displayPreviewResult(cachedResult, file.path);
-            
-            // 预加载功能已禁用
-            // preloadAdjacentPreviews();
-            
-            // 更新导航按钮状态
-            updateNavigationButtons();
-            return;
-        } else {
-            // 清除失败的缓存，重新生成
-            previewCache.delete(file.path);
-        }
+        previewCache.delete(file.path);
     }
     
     // 启动预览生成请求（不等待结果）
