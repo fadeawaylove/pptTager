@@ -32,8 +32,10 @@
     "electron-packager": "^17.1.2"
   },
   "dependencies": {
+    "canvas": "^3.1.2",
     "fs-extra": "^11.1.1",
-    "path": "^0.12.7"
+    "path": "^0.12.7",
+    "pdfjs-dist": "^5.4.54"
   },
   "build": {
     "appId": "com.example.ppt-tagger",

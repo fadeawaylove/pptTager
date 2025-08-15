@@ -24,6 +24,7 @@ let maxConcurrentPreviews = 3; // 最大并发预览数量（优化：降低并�
 let isProcessingQueue = false; // 是否正在处理队列
 let currentMainPreviewPath = null; // 当前主预览文件路径
 let previewAbortControllers = new Map(); // 预览任务的中止控制器
+let currentPreviewPath = null; // 当前预览的PDF路径，用于切换预览模式
 
 // 文件监控相关变量
 let isFileWatchingEnabled = false;
@@ -119,6 +120,26 @@ const previewLoading = document.getElementById('previewLoading');
 const editPreviewTagsBtn = document.getElementById('editPreviewTags');
 const openPreviewFileBtn = document.getElementById('openPreviewFile');
 const previewTagsEl = document.getElementById('previewTags');
+
+// 嵌入式PDF查看器元素
+const embeddedPDFViewer = document.getElementById('embeddedPDFViewer');
+const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+const pdfPages = document.getElementById('pdfPages');
+const pdfPageInfo = document.getElementById('pdfPageInfo');
+const pdfZoomSelect = document.getElementById('pdfZoomSelect');
+const pdfZoomOut = document.getElementById('pdfZoomOut');
+const pdfZoomIn = document.getElementById('pdfZoomIn');
+
+// PDF.js相关变量
+let currentPDFDoc = null;
+let currentPDFScale = 1;
+let currentPDFPage = 1;
+let totalPDFPages = 0;
+
+// 初始化PDF.js
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
 
 // 动态调整字体大小
 function adjustFontSize() {
@@ -301,6 +322,72 @@ nextBtn.addEventListener('click', showNextPreview);
 editPreviewTagsBtn.addEventListener('click', editPreviewTags);
 openPreviewFileBtn.addEventListener('click', openPreviewFile);
 document.getElementById('retryPreviewBtn').addEventListener('click', retryPreview);
+
+// 嵌入式PDF查看器事件
+if (pdfZoomOut) {
+    pdfZoomOut.addEventListener('click', () => {
+        if (currentPDFScale > 0.5) {
+            currentPDFScale -= 0.25;
+            renderAllPDFPages();
+            updatePDFZoomSelect();
+        }
+    });
+}
+
+if (pdfZoomIn) {
+    pdfZoomIn.addEventListener('click', () => {
+        if (currentPDFScale < 3) {
+            currentPDFScale += 0.25;
+            renderAllPDFPages();
+            updatePDFZoomSelect();
+        }
+    });
+}
+
+if (pdfZoomSelect) {
+    pdfZoomSelect.addEventListener('change', (e) => {
+        const value = e.target.value;
+        if (value === 'fit') {
+            fitPDFToWidth();
+        } else {
+            currentPDFScale = parseFloat(value);
+            renderAllPDFPages();
+        }
+    });
+}
+
+// PDF页面容器拖拽滚动事件
+if (pdfPagesContainer) {
+    let isDragging = false;
+    let startY = 0;
+    let scrollTop = 0;
+    
+    pdfPagesContainer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startY = e.pageY - pdfPagesContainer.offsetTop;
+        scrollTop = pdfPagesContainer.scrollTop;
+        pdfPagesContainer.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+    
+    pdfPagesContainer.addEventListener('mouseleave', () => {
+        isDragging = false;
+        pdfPagesContainer.style.cursor = 'grab';
+    });
+    
+    pdfPagesContainer.addEventListener('mouseup', () => {
+        isDragging = false;
+        pdfPagesContainer.style.cursor = 'grab';
+    });
+    
+    pdfPagesContainer.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const y = e.pageY - pdfPagesContainer.offsetTop;
+        const walk = (y - startY) * 2; // 调整拖拽敏感度
+        pdfPagesContainer.scrollTop = scrollTop - walk;
+    });
+}
     
     // 点击预览模态框外部关闭
     previewModal.addEventListener('click', (e) => {
@@ -1135,43 +1222,25 @@ async function displayPreviewResult(result, filePath) {
     previewLoading.classList.add('hidden');
     
     if (result.success && result.pdfPath) {
-        // 成功获取PDF预览
-        // 读取PDF文件内容到内存，避免锁定原始文件
+        // 添加详细日志区分缓存和重新生成
+        if (result.cached) {
+            console.log('✅ 使用缓存PDF文件:', result.pdfPath);
+        } else {
+            console.log('🔄 使用新生成的PDF文件:', result.pdfPath);
+        }
+        console.log('检测到PDF文件，使用内嵌PDF查看器打开');
+        // 使用内嵌PDF查看器
         try {
-            const pdfResult = await ipcRenderer.invoke('read-pdf-as-base64', result.pdfPath);
-            
-            if (pdfResult.success) {
-                // 使用base64 data URL加载PDF，避免文件锁定
-                const pdfDataUrl = `data:${pdfResult.mimeType};base64,${pdfResult.base64Data}`;
-                
-                // 添加webview加载事件监听
-                previewPDF.addEventListener('dom-ready', function onDomReady() {
-                    previewPDF.removeEventListener('dom-ready', onDomReady);
-                    previewPDF.classList.remove('hidden');
-                    previewImage.classList.add('hidden');
-                });
-                
-                // 添加错误处理
-                previewPDF.addEventListener('did-fail-load', function onFailLoad() {
-                    previewPDF.removeEventListener('did-fail-load', onFailLoad);
-                    console.warn('PDF加载失败，尝试直接显示');
-                    previewPDF.classList.remove('hidden');
-                    previewImage.classList.add('hidden');
-                });
-                
-                // 设置webview的src来加载PDF（使用data URL）
-                previewPDF.src = pdfDataUrl;
-                
-                hideRetryButton();
-            } else {
-                throw new Error(pdfResult.error || '读取PDF文件失败');
-            }
+            await showEmbeddedPDFViewer(result.pdfPath);
+            console.log('PDF在内嵌查看器中打开成功:', result.pdfPath);
+            hideRetryButton();
         } catch (error) {
             console.error('加载PDF预览失败:', error);
             // 降级到错误显示
             previewImage.src = '';
             previewImage.alt = '无法加载PDF预览: ' + error.message;
             previewImage.classList.remove('hidden');
+            hideEmbeddedPDFViewer();
             previewPDF.classList.add('hidden');
             showRetryButton();
         }
@@ -1362,6 +1431,7 @@ function closePreviewModal() {
     previewImage.src = '';
     previewPDF.classList.add('hidden');
     previewImage.classList.add('hidden');
+    hideEmbeddedPDFViewer();
     currentPreviewIndex = 0;
     previewFiles = [];
     
@@ -1448,7 +1518,7 @@ async function executePreviewTask(task) {
     // 创建预览任务Promise
     const previewPromise = (async () => {
         try {
-            console.log(`开始生成预览: ${filePath}`);
+            console.log(`📋 开始处理预览请求: ${filePath}`);
             
             // 检查是否已被取消
             if (abortController.signal.aborted) {
@@ -1466,7 +1536,16 @@ async function executePreviewTask(task) {
             // 缓存预览结果
             previewCache.set(filePath, result);
             
-            console.log(`预览生成完成: ${filePath}`);
+            // 添加详细的完成日志
+            if (result.success) {
+                if (result.cached) {
+                    console.log(`✅ 预览处理完成 (使用缓存): ${filePath}`);
+                } else {
+                    console.log(`🔄 预览处理完成 (重新生成): ${filePath}`);
+                }
+            } else {
+                console.log(`❌ 预览处理失败: ${filePath}`, result.error);
+            }
             return result;
         } catch (error) {
             if (abortController.signal.aborted || error.message === '任务已被取消') {
@@ -3051,4 +3130,354 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && githubGuideModal && !githubGuideModal.classList.contains('hidden')) {
         closeGithubGuideModal();
     }
+    
+    // 嵌入式PDF查看器键盘导航
+    if (embeddedPDFViewer && !embeddedPDFViewer.classList.contains('hidden')) {
+        switch(event.key) {
+            case 'ArrowUp':
+                event.preventDefault();
+                scrollPDFUp();
+                break;
+            case 'ArrowDown':
+                event.preventDefault();
+                scrollPDFDown();
+                break;
+            case 'Escape':
+                hideEmbeddedPDFViewer();
+                break;
+        }
+    }
 });
+
+// 嵌入式PDF查看器功能函数
+function showEmbeddedPDFViewer(pdfPath) {
+    if (!embeddedPDFViewer || !pdfPath) return;
+    
+    console.log('显示嵌入式PDF查看器:', pdfPath);
+    
+    // 隐藏其他预览元素
+    previewImage.classList.add('hidden');
+    previewPDF.classList.add('hidden');
+    
+    // 显示嵌入式PDF查看器
+    embeddedPDFViewer.classList.remove('hidden');
+    
+    // 加载PDF
+    loadEmbeddedPDF(pdfPath);
+}
+
+function hideEmbeddedPDFViewer() {
+    if (!embeddedPDFViewer) return;
+    
+    embeddedPDFViewer.classList.add('hidden');
+    
+    // 清理PDF文档
+    if (currentPDFDoc) {
+        currentPDFDoc.destroy();
+        currentPDFDoc = null;
+    }
+    
+    // 清理页面容器
+    if (pdfPages) {
+        pdfPages.innerHTML = '';
+    }
+    
+    // 重置状态
+    currentPDFPage = 1;
+    totalPDFPages = 0;
+    currentPDFScale = 1;
+}
+
+async function loadEmbeddedPDF(pdfPath) {
+    try {
+        console.log('开始加载PDF:', pdfPath);
+        
+        // 设置当前预览路径
+        currentPreviewPath = pdfPath;
+        
+        // 检查PDF.js是否可用
+        if (typeof pdfjsLib === 'undefined') {
+            throw new Error('PDF.js库未加载');
+        }
+        
+        // 显示加载状态
+        if (pdfPages) {
+            pdfPages.innerHTML = '<div class="flex items-center justify-center h-64"><div class="text-gray-500">正在加载PDF...</div></div>';
+        }
+        
+        // 加载PDF文档，添加更多配置选项
+        const loadingTask = pdfjsLib.getDocument({
+            url: pdfPath,
+            cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+            cMapPacked: true,
+            standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/',
+            useSystemFonts: false,
+            disableFontFace: false,
+            disableRange: false
+        });
+        
+        console.log('PDF加载任务创建成功');
+        currentPDFDoc = await loadingTask.promise;
+        console.log('PDF文档加载成功，页数:', currentPDFDoc.numPages);
+        
+        totalPDFPages = currentPDFDoc.numPages;
+        currentPDFPage = 1;
+        
+        // 更新页面信息
+        updatePDFPageInfo();
+        
+        // 默认适应宽度
+        fitPDFToWidth();
+        
+        console.log('PDF渲染完成');
+    } catch (error) {
+        console.error('加载PDF失败:', error);
+        
+        if (pdfPages) {
+            pdfPages.innerHTML = `<div class="flex items-center justify-center h-64"><div class="text-red-500">PDF加载失败: ${error.message}</div></div>`;
+        }
+    }
+}
+
+async function renderAllPDFPages() {
+    if (!currentPDFDoc || !pdfPages) {
+        console.error('PDF文档或容器不存在');
+        return;
+    }
+    
+    console.log('开始渲染PDF页面，总页数:', totalPDFPages);
+    
+    // 清空容器
+    pdfPages.innerHTML = '';
+    
+    // 限制渲染页数以提高性能
+    const maxPagesToRender = Math.min(totalPDFPages, 5);
+    
+    // 渲染每一页
+    for (let pageNum = 1; pageNum <= maxPagesToRender; pageNum++) {
+        try {
+            console.log('渲染第', pageNum, '页');
+            
+            // 获取页面
+            const page = await currentPDFDoc.getPage(pageNum);
+            
+            // 计算视口
+            const viewport = page.getViewport({ scale: currentPDFScale });
+            
+            // 创建页面容器
+            const pageContainer = document.createElement('div');
+            pageContainer.className = 'pdf-page-container mb-4';
+            
+            // 创建canvas
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            canvas.className = 'border border-gray-300 shadow-lg';
+            
+            pageContainer.appendChild(canvas);
+            
+            // 添加页码标签
+            const pageLabel = document.createElement('div');
+            pageLabel.className = 'text-center text-sm text-gray-600 mt-2';
+            pageLabel.textContent = `第 ${pageNum} 页`;
+            pageContainer.appendChild(pageLabel);
+            
+            // 添加到容器
+            pdfPages.appendChild(pageContainer);
+            
+            // 渲染页面到canvas
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+            
+            await page.render(renderContext).promise;
+            console.log('第', pageNum, '页渲染完成');
+            
+        } catch (error) {
+            console.error('渲染第', pageNum, '页失败:', error);
+            
+            // 创建错误页面
+            const errorContainer = document.createElement('div');
+            errorContainer.className = 'pdf-page-container mb-4 p-4 border border-red-300 bg-red-50';
+            errorContainer.innerHTML = `<div class="text-red-600">第 ${pageNum} 页渲染失败: ${error.message}</div>`;
+            pdfPages.appendChild(errorContainer);
+        }
+    }
+    
+    // 如果有更多页面，显示提示
+    if (totalPDFPages > maxPagesToRender) {
+        const moreContainer = document.createElement('div');
+        moreContainer.className = 'pdf-page-container mb-4 p-4 border border-gray-300 bg-gray-50';
+        moreContainer.innerHTML = `<div class="text-gray-600">还有 ${totalPDFPages - maxPagesToRender} 页未显示（为了性能考虑）</div>`;
+        pdfPages.appendChild(moreContainer);
+    }
+}
+
+function updatePDFPageInfo() {
+    if (pdfPageInfo && totalPDFPages > 0) {
+        pdfPageInfo.textContent = `共 ${totalPDFPages} 页`;
+    }
+}
+
+function updatePDFZoomSelect() {
+    if (pdfZoomSelect) {
+        pdfZoomSelect.value = currentPDFScale.toString();
+    }
+}
+
+function fitPDFToWidth() {
+    if (!currentPDFDoc || !pdfPagesContainer) return;
+    
+    // 获取容器宽度
+    const containerWidth = pdfPagesContainer.clientWidth - 40; // 减去padding
+    
+    // 获取第一页来计算缩放比例
+    currentPDFDoc.getPage(1).then(page => {
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = containerWidth / viewport.width;
+        currentPDFScale = Math.min(scale, 3); // 最大缩放3倍
+        
+        renderAllPDFPages();
+        updatePDFZoomSelect();
+    });
+}
+
+function scrollPDFUp() {
+    if (pdfPagesContainer) {
+        pdfPagesContainer.scrollBy(0, -100);
+    }
+}
+
+function scrollPDFDown() {
+    if (pdfPagesContainer) {
+        pdfPagesContainer.scrollBy(0, 100);
+    }
+}
+
+// 图片预览相关函数
+let currentImagePaths = [];
+let currentImageIndex = 0;
+
+// 加载图片预览
+async function loadImagePreview(pdfPath) {
+    try {
+        console.log('开始加载图片预览:', pdfPath);
+        
+        // 显示加载状态
+        const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+        if (pdfPagesContainer) {
+            pdfPagesContainer.innerHTML = '<div class="loading-message">正在生成图片预览...</div>';
+        }
+        
+        // 调用主进程转换PDF为图片
+        const result = await ipcRenderer.invoke('convert-pdf-to-images', pdfPath);
+        
+        if (result.success) {
+            currentImagePaths = result.imagePaths;
+            currentImageIndex = 0;
+            
+            console.log(result.cached ? '使用缓存图片' : '使用新生成的图片', '共', currentImagePaths.length, '张');
+            
+            // 显示图片预览
+            displayImagePreview();
+            
+            // 更新页面信息
+            updateImagePageInfo();
+            
+        } else {
+            console.error('图片预览加载失败:', result.error);
+            if (pdfPagesContainer) {
+                pdfPagesContainer.innerHTML = `
+                    <div class="error-message">
+                        <p>图片预览加载失败: ${result.error}</p>
+                        <button onclick="loadEmbeddedPDF('${pdfPath}')">切换到PDF预览</button>
+                    </div>
+                `;
+            }
+        }
+        
+    } catch (error) {
+        console.error('图片预览加载错误:', error);
+        const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+        if (pdfPagesContainer) {
+            pdfPagesContainer.innerHTML = `
+                <div class="error-message">
+                    <p>图片预览加载错误: ${error.message}</p>
+                    <button onclick="loadEmbeddedPDF('${pdfPath}')">切换到PDF预览</button>
+                </div>
+            `;
+        }
+    }
+}
+
+// 显示图片预览
+function displayImagePreview() {
+    const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+    if (!pdfPagesContainer || currentImagePaths.length === 0) {
+        return;
+    }
+    
+    // 清空容器
+    pdfPagesContainer.innerHTML = '';
+    
+    // 创建图片容器
+    currentImagePaths.forEach((imagePath, index) => {
+        const imageContainer = document.createElement('div');
+        imageContainer.className = 'image-page-container';
+        imageContainer.style.cssText = `
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        `;
+        
+        const img = document.createElement('img');
+        img.src = `file://${imagePath}`;
+        img.style.cssText = `
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        `;
+        
+        const pageLabel = document.createElement('div');
+        pageLabel.textContent = `第 ${index + 1} 页`;
+        pageLabel.style.cssText = `
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        `;
+        
+        imageContainer.appendChild(img);
+        imageContainer.appendChild(pageLabel);
+        pdfPagesContainer.appendChild(imageContainer);
+    });
+}
+
+// 更新图片页面信息
+function updateImagePageInfo() {
+    const pageInfo = document.getElementById('pdfPageInfo');
+    if (pageInfo && currentImagePaths.length > 0) {
+        pageInfo.textContent = `共 ${currentImagePaths.length} 页`;
+    }
+}
+
+// 切换预览模式
+function togglePreviewMode(pdfPath) {
+    const currentMode = document.getElementById('previewModeToggle');
+    if (currentMode && currentMode.textContent.includes('图片')) {
+        // 当前是PDF模式，切换到图片模式
+        loadImagePreview(pdfPath);
+        currentMode.textContent = '切换到PDF预览';
+    } else {
+        // 当前是图片模式，切换到PDF模式
+        loadEmbeddedPDF(pdfPath);
+        if (currentMode) {
+            currentMode.textContent = '切换到图片预览';
+        }
+    }
+}

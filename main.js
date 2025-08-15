@@ -36,7 +36,7 @@ function createWindow() {
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
   
   // 计算窗口大小为屏幕的3/4
-  const windowWidth = Math.floor(screenWidth * 0.75);
+  const windowWidth = Math.floor(screenWidth * 0.70);
   const windowHeight = Math.floor(screenHeight * 0.85);
   
   // 设置最小和最大尺寸限制
@@ -650,6 +650,126 @@ function escapeXml(unsafe) {
       case '"': return '&quot;';
     }
   });
+}
+
+// PDF转图片处理
+ipcMain.handle('convert-pdf-to-images', async (event, pdfPath) => {
+  try {
+    console.log('开始将PDF转换为图片:', pdfPath);
+    
+    // 计算PDF文件的MD5值
+    const pdfMD5 = getFileMD5(pdfPath);
+    const cacheDir = getActualCachePath();
+    const imagesCacheDir = path.join(cacheDir, 'images', pdfMD5);
+    
+    // 确保图片缓存目录存在
+    await fs.ensureDir(imagesCacheDir);
+    
+    // 检查是否已有缓存的图片
+    const existingImages = await fs.readdir(imagesCacheDir).catch(() => []);
+    const imageFiles = existingImages.filter(file => file.endsWith('.png')).sort();
+    
+    if (imageFiles.length > 0) {
+      console.log('使用缓存的图片:', imageFiles.length, '张');
+      const imagePaths = imageFiles.map(file => path.join(imagesCacheDir, file));
+      return {
+        success: true,
+        imagePaths: imagePaths,
+        cached: true
+      };
+    }
+    
+    // 使用PDF.js转换PDF为图片
+    const imagePaths = await convertPDFToImages(pdfPath, imagesCacheDir);
+    
+    if (imagePaths.length > 0) {
+      console.log('PDF转图片成功，生成', imagePaths.length, '张图片');
+      return {
+        success: true,
+        imagePaths: imagePaths,
+        cached: false
+      };
+    } else {
+      return {
+        success: false,
+        error: 'PDF转图片失败'
+      };
+    }
+    
+  } catch (error) {
+    console.error('PDF转图片处理错误:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 使用PDF.js将PDF转换为图片
+async function convertPDFToImages(pdfPath, outputDir) {
+  try {
+    // 动态导入PDF.js (Node.js版本)
+    const pdfjsLib = await import('pdfjs-dist');
+    
+    // 读取PDF文件
+    const pdfBuffer = await fs.readFile(pdfPath);
+    
+    // 加载PDF文档
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfBuffer,
+      useSystemFonts: false,
+      disableFontFace: false
+    });
+    
+    const pdfDoc = await loadingTask.promise;
+    const numPages = pdfDoc.numPages;
+    const imagePaths = [];
+    
+    console.log('PDF页数:', numPages);
+    
+    // 限制转换页数以提高性能
+    const maxPagesToConvert = Math.min(numPages, 10);
+    
+    for (let pageNum = 1; pageNum <= maxPagesToConvert; pageNum++) {
+      try {
+        const page = await pdfDoc.getPage(pageNum);
+        
+        // 设置合适的缩放比例
+        const scale = 2.0; // 提高分辨率
+        const viewport = page.getViewport({ scale });
+        
+        // 创建Canvas
+        const { createCanvas } = await import('canvas');
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const context = canvas.getContext('2d');
+        
+        // 渲染页面到Canvas
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+        
+        await page.render(renderContext).promise;
+        
+        // 保存为PNG图片
+        const imagePath = path.join(outputDir, `page-${pageNum.toString().padStart(3, '0')}.png`);
+        const buffer = canvas.toBuffer('image/png');
+        await fs.writeFile(imagePath, buffer);
+        
+        imagePaths.push(imagePath);
+        console.log('转换完成第', pageNum, '页');
+        
+      } catch (pageError) {
+        console.error('转换第', pageNum, '页失败:', pageError);
+      }
+    }
+    
+    return imagePaths;
+    
+  } catch (error) {
+    console.error('PDF转图片失败:', error);
+    return [];
+  }
 }
 
 // GitHub Token 存储文件路径（使用动态数据目录）

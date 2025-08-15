@@ -21,6 +21,97 @@
     user-select: none;
 }
 
+/* 嵌入式PDF查看器样式 */
+.embedded-pdf-viewer {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.pdf-toolbar {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 8px 8px 0 0;
+}
+
+.pdf-btn {
+    background: #e9ecef;
+    border: 1px solid #ced4da;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pdf-btn:hover {
+    background: #dee2e6;
+    border-color: #adb5bd;
+}
+
+.pdf-btn:active {
+    background: #ced4da;
+    transform: translateY(1px);
+}
+
+.pdf-zoom-select {
+    background: #ffffff;
+    border: 1px solid #ced4da;
+    color: #495057;
+    cursor: pointer;
+}
+
+.pdf-zoom-select:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.pdf-pages-container {
+    background: #f8f9fa;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #ced4da #f8f9fa;
+    cursor: grab;
+    user-select: none;
+}
+
+.pdf-pages-container:active {
+    cursor: grabbing;
+}
+
+.pdf-pages-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.pdf-pages-container::-webkit-scrollbar-track {
+    background: #f8f9fa;
+}
+
+.pdf-pages-container::-webkit-scrollbar-thumb {
+    background: #ced4da;
+    border-radius: 4px;
+}
+
+.pdf-pages-container::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
+
+.pdf-page-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.pdf-page-container canvas {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: #ffffff;
+}
+
 html {
     font-size: var(--base-font-size);
 }
@@ -1096,11 +1187,16 @@ body {
 }
 
 .preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 20px;
     color: #ccc;
+    z-index: 10;
 }
 
 .loading-spinner {
