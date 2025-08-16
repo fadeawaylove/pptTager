@@ -135,6 +135,7 @@ let currentPDFDoc = null;
 let currentPDFScale = 1;
 let currentPDFPage = 1;
 let totalPDFPages = 0;
+let isFitToWidth = true; // 默认使用适应宽度模式
 
 // 初始化PDF.js
 if (typeof pdfjsLib !== 'undefined') {
@@ -327,6 +328,7 @@ document.getElementById('retryPreviewBtn').addEventListener('click', retryPrevie
 if (pdfZoomOut) {
     pdfZoomOut.addEventListener('click', () => {
         if (currentPDFScale > 0.5) {
+            isFitToWidth = false;
             currentPDFScale -= 0.25;
             renderAllPDFPages();
             updatePDFZoomSelect();
@@ -337,6 +339,7 @@ if (pdfZoomOut) {
 if (pdfZoomIn) {
     pdfZoomIn.addEventListener('click', () => {
         if (currentPDFScale < 3) {
+            isFitToWidth = false;
             currentPDFScale += 0.25;
             renderAllPDFPages();
             updatePDFZoomSelect();
@@ -348,8 +351,10 @@ if (pdfZoomSelect) {
     pdfZoomSelect.addEventListener('change', (e) => {
         const value = e.target.value;
         if (value === 'fit') {
+            isFitToWidth = true;
             fitPDFToWidth();
         } else {
+            isFitToWidth = false;
             currentPDFScale = parseFloat(value);
             renderAllPDFPages();
         }
@@ -3186,6 +3191,7 @@ function hideEmbeddedPDFViewer() {
     currentPDFPage = 1;
     totalPDFPages = 0;
     currentPDFScale = 1;
+    isFitToWidth = true; // 重置为适应宽度模式
 }
 
 async function loadEmbeddedPDF(pdfPath) {
@@ -3323,7 +3329,12 @@ function updatePDFPageInfo() {
 
 function updatePDFZoomSelect() {
     if (pdfZoomSelect) {
-        pdfZoomSelect.value = currentPDFScale.toString();
+        // 检查当前缩放是否是通过"适应宽度"设置的
+        if (isFitToWidth) {
+            pdfZoomSelect.value = 'fit';
+        } else {
+            pdfZoomSelect.value = currentPDFScale.toString();
+        }
     }
 }
 
