@@ -693,9 +693,9 @@ function createFileCard(file) {
         </div>
         <div class="file-actions">
             <button class="btn btn-small btn-preview" onclick="previewFile('${file.path.replace(/\\/g, '\\\\')}')">预览</button>
-            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\\/g, '\\\\')}')">编辑标签</button>
-            <button class="btn btn-small btn-move" onclick="moveFile('${file.path.replace(/\\/g, '\\\\')}')">移动文件</button>
-            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\\/g, '\\\\')}')">打开文件</button>
+            <button class="btn btn-small btn-edit" onclick="editTags('${file.path.replace(/\\/g, '\\\\')}')">标签</button>
+            <button class="btn btn-small btn-move" onclick="moveFile('${file.path.replace(/\\/g, '\\\\')}')">移动</button>
+            <button class="btn btn-small btn-open" onclick="openFile('${file.path.replace(/\\/g, '\\\\')}')">打开</button>
         </div>
     `;
     
