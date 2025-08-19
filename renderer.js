@@ -3492,3 +3492,90 @@ function togglePreviewMode(pdfPath) {
         }
     }
 }
+
+// 悬浮滚动按钮功能
+let scrollToTopBtn = null;
+let scrollToBottomBtn = null;
+let contentContainer = null;
+
+// 初始化悬浮滚动按钮
+function initScrollButtons() {
+    scrollToTopBtn = document.getElementById('scrollToTop');
+    scrollToBottomBtn = document.getElementById('scrollToBottom');
+    contentContainer = document.querySelector('.content');
+    
+    if (!scrollToTopBtn || !scrollToBottomBtn || !contentContainer) {
+        return;
+    }
+    
+    // 添加点击事件
+    scrollToTopBtn.addEventListener('click', scrollToTop);
+    scrollToBottomBtn.addEventListener('click', scrollToBottom);
+    
+    // 添加滚动监听
+    contentContainer.addEventListener('scroll', handleScroll);
+    
+    // 初始检查
+    handleScroll();
+}
+
+// 滚动到顶部
+function scrollToTop() {
+    if (contentContainer) {
+        contentContainer.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+}
+
+// 滚动到底部
+function scrollToBottom() {
+    if (contentContainer) {
+        contentContainer.scrollTo({
+            top: contentContainer.scrollHeight,
+            behavior: 'smooth'
+        });
+    }
+}
+
+// 处理滚动事件
+function handleScroll() {
+    if (!contentContainer || !scrollToTopBtn || !scrollToBottomBtn) {
+        return;
+    }
+    
+    const scrollTop = contentContainer.scrollTop;
+    const scrollHeight = contentContainer.scrollHeight;
+    const clientHeight = contentContainer.clientHeight;
+    const scrollBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // 显示/隐藏回到顶部按钮
+    if (scrollTop > 200) {
+        scrollToTopBtn.classList.add('show');
+    } else {
+        scrollToTopBtn.classList.remove('show');
+    }
+    
+    // 显示/隐藏滚动到底部按钮
+    if (scrollBottom > 200) {
+        scrollToBottomBtn.classList.add('show');
+    } else {
+        scrollToBottomBtn.classList.remove('show');
+    }
+}
+
+// 在DOM加载完成后初始化滚动按钮
+document.addEventListener('DOMContentLoaded', function() {
+    // 延迟初始化，确保所有元素都已加载
+    setTimeout(initScrollButtons, 100);
+});
+
+// 如果DOM已经加载完成，立即初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initScrollButtons, 100);
+    });
+} else {
+    setTimeout(initScrollButtons, 100);
+}

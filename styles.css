@@ -2295,3 +2295,83 @@ body {
         margin-bottom: 8px;
     }
 }
+
+/* 悬浮滚动按钮样式 */
+.scroll-buttons {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.scroll-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    transition: all 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+}
+
+.scroll-btn:hover {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    transform: translateY(0) scale(1.1);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.scroll-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+.scroll-btn.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.scroll-btn svg {
+    transition: transform 0.2s ease;
+}
+
+.scroll-btn:hover svg {
+    transform: scale(1.1);
+}
+
+/* 按钮动画延迟 */
+.scroll-btn-top {
+    transition-delay: 0.1s;
+}
+
+.scroll-btn-bottom {
+    transition-delay: 0.2s;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .scroll-buttons {
+        right: 15px;
+        bottom: 15px;
+    }
+    
+    .scroll-btn {
+        width: 45px;
+        height: 45px;
+    }
+    
+    .scroll-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+}
