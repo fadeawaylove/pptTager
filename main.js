@@ -5,6 +5,9 @@ const { exec, spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
+
+// PPT转图片工具路径
+const PPT_TO_IMAGES_PATH = path.join(__dirname, 'bin', 'ppt-to-images.exe');
 // 移除了 chokidar 和 osUtils 依赖
 
 // 全局变量跟踪自动更新模式
@@ -487,34 +490,22 @@ ipcMain.handle('get-ppt-preview', async (event, filePath) => {
     // 创建预览任务Promise
     const previewPromise = (async () => {
       try {
-        // 首先检查LibreOffice是否可用
-        const isLibreOfficeAvailable = await checkLibreOfficeAvailable();
+        // 使用新的图片转换策略
+        const imageResult = await getImagesForFile(filePath);
         
-        if (!isLibreOfficeAvailable) {
-          console.log('LibreOffice未安装，返回安装提示');
-          return {
-            success: false,
-            error: 'LibreOffice未安装',
-            svg: generateInstallPromptSVG()
-          };
-        }
-        
-        // 使用新的PDF转换策略
-        const pdfResult = await getThumbnailForFile(filePath);
-        
-        if (pdfResult.success) {
-          console.log('获取PDF成功:', pdfResult.cached ? '使用缓存' : '新生成');
+        if (imageResult.success) {
+          console.log('获取图片成功:', imageResult.cached ? '使用缓存' : '新生成');
           return {
             success: true,
-            pdfPath: pdfResult.pdfPath,
-            cached: pdfResult.cached
+            images: imageResult.images,
+            cached: imageResult.cached
           };
         } else {
-          console.log('获取PDF失败:', pdfResult.error);
+          console.log('获取图片失败:', imageResult.error);
           return {
             success: false,
-            error: pdfResult.error,
-            svg: generateErrorSVG(pdfResult.error)
+            error: imageResult.error,
+            svg: generateErrorSVG(imageResult.error)
           };
         }
       } finally {
@@ -1711,16 +1702,16 @@ async function saveThumbnailMapping(mapping) {
   }
 }
 
-// 获取文件的缩略图
-async function getThumbnailForFile(filePath) {
+// 获取文件的图片预览
+async function getImagesForFile(filePath) {
   try {
     // 计算文件的MD5值
     const fileMD5 = getFileMD5(filePath);
     const cacheDir = getActualCachePath();
     await fs.ensureDir(cacheDir);
     
-    // 新的PDF文件路径（使用MD5作为文件名）
-    const newPDFPath = path.join(cacheDir, `${fileMD5}.pdf`);
+    // 图片缓存文件路径（使用MD5作为文件名）
+    const cacheFilePath = path.join(cacheDir, `${fileMD5}.json`);
     
     // 读取缩略图映射
     const thumbnailMapping = await readThumbnailMapping();
@@ -1729,58 +1720,73 @@ async function getThumbnailForFile(filePath) {
     const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
     const existingMD5 = thumbnailMapping[relativePath];
     
-    // 如果新的PDF文件已存在，直接使用
-    if (await fs.pathExists(newPDFPath)) {
-      console.log('使用现有PDF:', newPDFPath);
+    // 如果缓存文件已存在，直接使用
+    if (await fs.pathExists(cacheFilePath)) {
+      console.log('使用现有图片缓存:', cacheFilePath);
       
-      // 更新映射（如果需要）
-      if (existingMD5 !== fileMD5) {
-        thumbnailMapping[relativePath] = fileMD5;
-        await saveThumbnailMapping(thumbnailMapping);
+      try {
+        const cachedData = await fs.readJson(cacheFilePath);
+        
+        // 更新映射（如果需要）
+        if (existingMD5 !== fileMD5) {
+          thumbnailMapping[relativePath] = fileMD5;
+          await saveThumbnailMapping(thumbnailMapping);
+        }
+        
+        return {
+          success: true,
+          images: cachedData.images,
+          cached: true
+        };
+      } catch (readError) {
+        console.warn('读取缓存文件失败:', readError);
+        // 继续执行转换
       }
-      
-      return {
-        success: true,
-        pdfPath: newPDFPath,
-        cached: true
-      };
     }
     
-    // 如果存在旧的PDF文件，删除它
+    // 如果存在旧的缓存文件，删除它
     if (existingMD5 && existingMD5 !== fileMD5) {
-      const oldPDFPath = path.join(cacheDir, `${existingMD5}.pdf`);
+      const oldCacheFile = path.join(cacheDir, `${existingMD5}.json`);
       try {
-        if (await fs.pathExists(oldPDFPath)) {
-          await fs.unlink(oldPDFPath);
-          console.log('删除旧PDF:', oldPDFPath);
+        if (await fs.pathExists(oldCacheFile)) {
+          await fs.unlink(oldCacheFile);
+          console.log('删除旧缓存:', oldCacheFile);
         }
       } catch (error) {
-        console.log('删除旧PDF失败:', error);
+        console.log('删除旧缓存失败:', error);
       }
     }
     
-    // 生成新的PDF
-    const success = await convertPPTToPDF(filePath, newPDFPath);
+    // 转换PPT为图片
+    const result = await convertPPTToImages(filePath);
     
-    if (success && await fs.pathExists(newPDFPath)) {
+    if (result.success && result.images) {
+      // 保存到缓存文件
+      try {
+        await fs.writeJson(cacheFilePath, { images: result.images });
+        console.log('图片数据已缓存到:', cacheFilePath);
+      } catch (cacheError) {
+        console.warn('保存缓存失败:', cacheError);
+      }
+      
       // 更新映射
       thumbnailMapping[relativePath] = fileMD5;
       await saveThumbnailMapping(thumbnailMapping);
       
       return {
         success: true,
-        pdfPath: newPDFPath,
+        images: result.images,
         cached: false
       };
     } else {
       return {
         success: false,
-        error: 'LibreOffice转换失败'
+        error: result.error || 'PPT转图片失败'
       };
     }
     
   } catch (error) {
-    console.error('获取缩略图失败:', error);
+    console.error('获取图片失败:', error);
     return {
       success: false,
       error: error.message
@@ -1789,23 +1795,19 @@ async function getThumbnailForFile(filePath) {
 }
 
 // 使用LibreOffice将PPT转换为PDF
-async function convertPPTToPDF(inputPath, outputPath) {
+async function convertPPTToImages(inputPath) {
   return new Promise((resolve) => {
-    const soffPath = getLibreOfficePath();
-    
-    if (!soffPath) {
-      console.error('LibreOffice未找到');
-      resolve(false);
+    if (!fs.existsSync(PPT_TO_IMAGES_PATH)) {
+      console.error('ppt-to-images.exe工具未找到:', PPT_TO_IMAGES_PATH);
+      resolve({ success: false, error: 'PPT转图片工具未找到' });
       return;
     }
     
-    // 构建LibreOffice命令参数
-    const outputDir = path.dirname(outputPath);
-    const args = ['--headless', '--convert-to', 'pdf', '--outdir', outputDir, inputPath];
+    console.log('执行PPT转图片命令:', PPT_TO_IMAGES_PATH, inputPath);
     
-    console.log('执行LibreOffice转换命令:', soffPath, args.join(' '));
-    
-    const child = spawn(soffPath, args);
+    const child = spawn(PPT_TO_IMAGES_PATH, [inputPath], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
     
     let stdout = '';
     let stderr = '';
@@ -1816,8 +1818,8 @@ async function convertPPTToPDF(inputPath, outputPath) {
       if (!resolved) {
         resolved = true;
         child.kill();
-        console.log('LibreOffice转换超时');
-        resolve(false);
+        console.log('PPT转图片超时');
+        resolve({ success: false, error: '转换超时' });
       }
     }, 30000);
     
@@ -1833,33 +1835,70 @@ async function convertPPTToPDF(inputPath, outputPath) {
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
-        const error = code !== 0 ? new Error(`LibreOffice exited with code ${code}`) : null;
-        if (error) {
-          console.error('LibreOffice转换失败:', error.message);
-          resolve(false);
+        
+        if (code !== 0) {
+          console.error('PPT转图片失败，退出代码:', code);
+          console.error('错误输出:', stderr);
+          resolve({ success: false, error: `转换失败，退出代码: ${code}` });
           return;
         }
         
-        if (stderr) {
-          console.warn('LibreOffice警告:', stderr);
-        }
-        
-        // LibreOffice会生成与输入文件同名的pdf文件
-        const baseName = path.basename(inputPath, path.extname(inputPath));
-        const generatedPath = path.join(outputDir, `${baseName}.pdf`);
-        
         try {
-          // 如果生成的文件存在，重命名为我们期望的文件名
-          if (await fs.pathExists(generatedPath) && generatedPath !== outputPath) {
-            await fs.move(generatedPath, outputPath);
-          }
+          // 解析输出的base64数据
+          const lines = stdout.trim().split('\n').filter(line => line.trim().length > 0);
+          const images = [];
           
-          const exists = await fs.pathExists(outputPath);
-          console.log('转换结果:', exists ? '成功' : '失败');
-          resolve(exists);
-        } catch (moveError) {
-          console.error('移动文件失败:', moveError);
-          resolve(false);
+          // 尝试解析整个输出为JSON
+           try {
+             const jsonData = JSON.parse(stdout.trim());
+             if (jsonData.success && jsonData.slides && Array.isArray(jsonData.slides)) {
+               for (const slide of jsonData.slides) {
+                 if (slide.base64_image) {
+                   images.push({
+                     slideNumber: slide.slide_number || images.length + 1,
+                     base64: slide.base64_image.startsWith('data:image/') ? slide.base64_image : `data:image/png;base64,${slide.base64_image}`
+                   });
+                 }
+               }
+             }
+           } catch (jsonError) {
+             // 如果不是完整JSON，按行解析
+             for (let i = 0; i < lines.length; i++) {
+               const line = lines[i].trim();
+               // 检查是否是base64数据（通常以data:image开头或者是纯base64字符串）
+               if (line.startsWith('data:image/') || (line.length > 100 && /^[A-Za-z0-9+/=]+$/.test(line))) {
+                 images.push({
+                   slideNumber: i + 1,
+                   base64: line.startsWith('data:image/') ? line : `data:image/png;base64,${line}`
+                 });
+               } else if (line.includes('base64_image')) {
+                 // 兼容JSON格式输出
+                 try {
+                   const lineJsonData = JSON.parse(line);
+                   if (lineJsonData.base64_image) {
+                     images.push({
+                       slideNumber: lineJsonData.slide_number || images.length + 1,
+                       base64: lineJsonData.base64_image.startsWith('data:image/') ? lineJsonData.base64_image : `data:image/png;base64,${lineJsonData.base64_image}`
+                     });
+                   }
+                 } catch (parseError) {
+                   console.warn('解析JSON行失败:', line.substring(0, 100) + '...');
+                 }
+               }
+             }
+           }
+          
+          if (images.length > 0) {
+            console.log(`PPT转换成功，共${images.length}张幻灯片`);
+            resolve({ success: true, images });
+          } else {
+            console.error('未找到有效的图片数据');
+            console.log('工具输出内容:', stdout.substring(0, 500) + '...');
+            resolve({ success: false, error: '未找到有效的图片数据' });
+          }
+        } catch (error) {
+          console.error('处理转换结果失败:', error);
+          resolve({ success: false, error: '处理转换结果失败' });
         }
       }
     });
@@ -1868,8 +1907,8 @@ async function convertPPTToPDF(inputPath, outputPath) {
        if (!resolved) {
          resolved = true;
          clearTimeout(timeout);
-         console.error('LibreOffice进程错误:', error.message);
-         resolve(false);
+         console.error('PPT转图片进程错误:', error.message);
+         resolve({ success: false, error: error.message });
        }
      });
    });

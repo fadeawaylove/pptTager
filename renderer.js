@@ -1226,24 +1226,24 @@ async function displayPreviewResult(result, filePath) {
     // 隐藏加载状态
     previewLoading.classList.add('hidden');
     
-    if (result.success && result.pdfPath) {
+    if (result.success && result.images && result.images.length > 0) {
         // 添加详细日志区分缓存和重新生成
         if (result.cached) {
-            console.log('✅ 使用缓存PDF文件:', result.pdfPath);
+            console.log('✅ 使用缓存图片数据，共', result.images.length, '张');
         } else {
-            console.log('🔄 使用新生成的PDF文件:', result.pdfPath);
+            console.log('🔄 使用新生成的图片数据，共', result.images.length, '张');
         }
-        console.log('检测到PDF文件，使用内嵌PDF查看器打开');
-        // 使用内嵌PDF查看器
+        console.log('检测到图片数据，使用图片预览模式');
+        // 使用图片预览模式
         try {
-            await showEmbeddedPDFViewer(result.pdfPath);
-            console.log('PDF在内嵌查看器中打开成功:', result.pdfPath);
+            await showImagePreview(result.images);
+            console.log('图片预览显示成功，共', result.images.length, '张');
             hideRetryButton();
         } catch (error) {
-            console.error('加载PDF预览失败:', error);
+            console.error('加载图片预览失败:', error);
             // 降级到错误显示
             previewImage.src = '';
-            previewImage.alt = '无法加载PDF预览: ' + error.message;
+            previewImage.alt = '无法加载图片预览: ' + error.message;
             previewImage.classList.remove('hidden');
             hideEmbeddedPDFViewer();
             previewPDF.classList.add('hidden');
@@ -3154,6 +3154,23 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
+// 图片预览功能函数
+function showImagePreview(images) {
+    if (!embeddedPDFViewer || !images || images.length === 0) return;
+    
+    console.log('显示图片预览，共', images.length, '张');
+    
+    // 隐藏其他预览元素
+    previewImage.classList.add('hidden');
+    previewPDF.classList.add('hidden');
+    
+    // 显示嵌入式查看器容器
+    embeddedPDFViewer.classList.remove('hidden');
+    
+    // 加载图片
+    loadImagePreviewFromBase64(images);
+}
+
 // 嵌入式PDF查看器功能函数
 function showEmbeddedPDFViewer(pdfPath) {
     if (!embeddedPDFViewer || !pdfPath) return;
@@ -3371,7 +3388,43 @@ function scrollPDFDown() {
 let currentImagePaths = [];
 let currentImageIndex = 0;
 
-// 加载图片预览
+// 加载base64图片预览
+function loadImagePreviewFromBase64(images) {
+    try {
+        console.log('开始加载base64图片预览，共', images.length, '张');
+        
+        // 显示加载状态
+        const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+        if (pdfPagesContainer) {
+            pdfPagesContainer.innerHTML = '<div class="loading-message">正在加载图片预览...</div>';
+        }
+        
+        // 设置当前图片数据
+        currentImagePaths = images; // 这里存储的是base64数据而不是路径
+        currentImageIndex = 0;
+        
+        console.log('加载图片预览，共', images.length, '张');
+        
+        // 显示图片预览
+        displayBase64ImagePreview();
+        
+        // 更新页面信息
+        updateImagePageInfo();
+        
+    } catch (error) {
+        console.error('图片预览加载错误:', error);
+        const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+        if (pdfPagesContainer) {
+            pdfPagesContainer.innerHTML = `
+                <div class="error-message">
+                    <p>图片预览加载错误: ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// 加载图片预览（原有的文件路径方式，保留兼容性）
 async function loadImagePreview(pdfPath) {
     try {
         console.log('开始加载图片预览:', pdfPath);
@@ -3423,7 +3476,62 @@ async function loadImagePreview(pdfPath) {
     }
 }
 
-// 显示图片预览
+// 显示base64图片预览
+function displayBase64ImagePreview() {
+    const pdfPagesContainer = document.getElementById('pdfPagesContainer');
+    if (!pdfPagesContainer || currentImagePaths.length === 0) {
+        return;
+    }
+    
+    // 清空容器
+    pdfPagesContainer.innerHTML = '';
+    
+    // 创建图片容器
+    currentImagePaths.forEach((imageData, index) => {
+        const imageContainer = document.createElement('div');
+        imageContainer.className = 'image-page-container';
+        imageContainer.style.cssText = `
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background: white;
+        `;
+        
+        const img = document.createElement('img');
+        // 处理图片数据，可能是对象或字符串
+        const base64Src = typeof imageData === 'object' ? imageData.base64 : imageData;
+        img.src = base64Src;
+        img.style.cssText = `
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        `;
+        
+        // 添加加载错误处理
+        img.onerror = function() {
+            this.src = '';
+            this.alt = `第 ${index + 1} 页加载失败`;
+            this.style.cssText += 'border: 2px dashed #ccc; padding: 20px; color: #999;';
+        };
+        
+        const pageLabel = document.createElement('div');
+        pageLabel.textContent = `第 ${index + 1} 页`;
+        pageLabel.style.cssText = `
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        `;
+        
+        imageContainer.appendChild(img);
+        imageContainer.appendChild(pageLabel);
+        pdfPagesContainer.appendChild(imageContainer);
+    });
+}
+
+// 显示图片预览（原有的文件路径方式，保留兼容性）
 function displayImagePreview() {
     const pdfPagesContainer = document.getElementById('pdfPagesContainer');
     if (!pdfPagesContainer || currentImagePaths.length === 0) {
