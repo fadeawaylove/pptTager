@@ -16,7 +16,47 @@ let isAutoUpdateMode = false;
 // 预览生成任务管理
 let activePreviewTasks = new Map(); // 正在进行的预览生成任务
 
+// 内存缓存 - 存储PPT图片数据
+let imageMemoryCache = new Map(); // key: fileMD5, value: { images: [], timestamp: Date.now() }
+const MEMORY_CACHE_MAX_SIZE = 20; // 最大缓存50个文件
+const MEMORY_CACHE_TTL = 300 * 60 * 1000; // 30分钟过期
+
 // 文件监控相关变量已移除
+
+// 内存缓存管理函数
+function cleanExpiredMemoryCache() {
+  const now = Date.now();
+  for (const [key, value] of imageMemoryCache.entries()) {
+    if (now - value.timestamp > MEMORY_CACHE_TTL) {
+      imageMemoryCache.delete(key);
+      console.log(`清理过期内存缓存: ${key}`);
+    }
+  }
+}
+
+function limitMemoryCacheSize() {
+  if (imageMemoryCache.size > MEMORY_CACHE_MAX_SIZE) {
+    // 按时间戳排序，删除最旧的缓存
+    const entries = Array.from(imageMemoryCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    const toDelete = entries.slice(0, imageMemoryCache.size - MEMORY_CACHE_MAX_SIZE);
+    for (const [key] of toDelete) {
+      imageMemoryCache.delete(key);
+      console.log(`清理旧内存缓存: ${key}`);
+    }
+  }
+}
+
+function clearMemoryCacheForFile(fileMD5) {
+  if (imageMemoryCache.has(fileMD5)) {
+    imageMemoryCache.delete(fileMD5);
+    console.log(`清理文件内存缓存: ${fileMD5}`);
+  }
+}
+
+// 定期清理过期缓存
+setInterval(cleanExpiredMemoryCache, 5 * 60 * 1000); // 每5分钟清理一次
 
 let mainWindow;
 const DATA_FILE = path.join(app.getPath('userData'), 'ppt-tags.json');
@@ -1624,6 +1664,93 @@ ipcMain.handle('get-ppt-directory', async () => {
   }
 });
 
+// 清除特定文件的缓存
+ipcMain.handle('clear-file-cache', async (event, filePath) => {
+  try {
+    const fileMD5 = getFileMD5(filePath);
+    
+    // 清除内存缓存
+    clearMemoryCacheForFile(fileMD5);
+    
+    // 删除文件缓存
+    const cacheDir = getActualCachePath();
+    const cacheFilePath = path.join(cacheDir, `${fileMD5}.json`);
+    
+    if (await fs.pathExists(cacheFilePath)) {
+      await fs.unlink(cacheFilePath);
+      console.log('手动清除文件缓存:', cacheFilePath);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('清除文件缓存失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 清除所有缓存
+ipcMain.handle('clear-all-cache', async () => {
+  try {
+    // 清除所有内存缓存
+    imageMemoryCache.clear();
+    console.log('已清除所有内存缓存');
+    
+    // 清除所有文件缓存
+    const cacheDir = getActualCachePath();
+    if (await fs.pathExists(cacheDir)) {
+      const files = await fs.readdir(cacheDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          await fs.unlink(path.join(cacheDir, file));
+        }
+      }
+      console.log('已清除所有文件缓存');
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('清除所有缓存失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 获取文件状态信息
+ipcMain.handle('get-file-stats', async (event, filePath) => {
+  try {
+    if (await fs.pathExists(filePath)) {
+      const stats = await fs.stat(filePath);
+      return {
+        mtime: stats.mtime.getTime(), // 返回时间戳
+        size: stats.size,
+        isFile: stats.isFile(),
+        isDirectory: stats.isDirectory()
+      };
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error('获取文件状态失败:', error);
+    return null;
+  }
+});
+
+// 获取文件MD5值
+ipcMain.handle('get-file-md5', async (event, filePath) => {
+  try {
+    if (await fs.pathExists(filePath)) {
+      const fileBuffer = await fs.readFile(filePath);
+      const hashSum = crypto.createHash('md5');
+      hashSum.update(fileBuffer);
+      return hashSum.digest('hex');
+    } else {
+      throw new Error('文件不存在: ' + filePath);
+    }
+  } catch (error) {
+    console.error('计算文件MD5失败:', error);
+    throw error;
+  }
+});
+
 // 生成错误提示SVG
 function generateErrorSVG(message) {
   return `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
@@ -1720,12 +1847,47 @@ async function getImagesForFile(filePath) {
     const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
     const existingMD5 = thumbnailMapping[relativePath];
     
-    // 如果缓存文件已存在，直接使用
+    // 先检查内存缓存
+    if (imageMemoryCache.has(fileMD5)) {
+      const memoryData = imageMemoryCache.get(fileMD5);
+      const now = Date.now();
+      
+      // 检查是否过期
+      if (now - memoryData.timestamp <= MEMORY_CACHE_TTL) {
+        console.log('使用内存缓存:', fileMD5);
+        
+        // 更新映射（如果需要）
+        if (existingMD5 !== fileMD5) {
+          thumbnailMapping[relativePath] = fileMD5;
+          await saveThumbnailMapping(thumbnailMapping);
+        }
+        
+        return {
+          success: true,
+          images: memoryData.images,
+          cached: true
+        };
+      } else {
+        // 过期了，删除内存缓存
+        imageMemoryCache.delete(fileMD5);
+        console.log('内存缓存已过期，删除:', fileMD5);
+      }
+    }
+    
+    // 再检查文件缓存
     if (await fs.pathExists(cacheFilePath)) {
-      console.log('使用现有图片缓存:', cacheFilePath);
+      console.log('使用文件缓存:', cacheFilePath);
       
       try {
         const cachedData = await fs.readJson(cacheFilePath);
+        
+        // 将文件缓存数据加载到内存缓存
+        imageMemoryCache.set(fileMD5, {
+          images: cachedData.images,
+          timestamp: Date.now()
+        });
+        limitMemoryCacheSize(); // 限制内存缓存大小
+        console.log('文件缓存已加载到内存:', fileMD5);
         
         // 更新映射（如果需要）
         if (existingMD5 !== fileMD5) {
@@ -1744,16 +1906,20 @@ async function getImagesForFile(filePath) {
       }
     }
     
-    // 如果存在旧的缓存文件，删除它
+    // 如果存在旧的缓存文件，删除它（包括内存缓存和文件缓存）
     if (existingMD5 && existingMD5 !== fileMD5) {
+      // 清除旧的内存缓存
+      clearMemoryCacheForFile(existingMD5);
+      
+      // 删除旧的文件缓存
       const oldCacheFile = path.join(cacheDir, `${existingMD5}.json`);
       try {
         if (await fs.pathExists(oldCacheFile)) {
           await fs.unlink(oldCacheFile);
-          console.log('删除旧缓存:', oldCacheFile);
+          console.log('删除旧文件缓存:', oldCacheFile);
         }
       } catch (error) {
-        console.log('删除旧缓存失败:', error);
+        console.log('删除旧文件缓存失败:', error);
       }
     }
     
@@ -1761,12 +1927,23 @@ async function getImagesForFile(filePath) {
     const result = await convertPPTToImages(filePath);
     
     if (result.success && result.images) {
-      // 保存到缓存文件
+      // 同时保存到内存缓存和文件缓存
+      const cacheData = {
+        images: result.images,
+        timestamp: Date.now()
+      };
+      
+      // 保存到内存缓存
+      imageMemoryCache.set(fileMD5, cacheData);
+      limitMemoryCacheSize(); // 限制内存缓存大小
+      console.log('图片数据已保存到内存缓存:', fileMD5);
+      
+      // 保存到文件缓存
       try {
         await fs.writeJson(cacheFilePath, { images: result.images });
-        console.log('图片数据已缓存到:', cacheFilePath);
+        console.log('图片数据已保存到文件缓存:', cacheFilePath);
       } catch (cacheError) {
-        console.warn('保存缓存失败:', cacheError);
+        console.warn('保存文件缓存失败:', cacheError);
       }
       
       // 更新映射
@@ -1797,8 +1974,13 @@ async function getImagesForFile(filePath) {
 // 使用LibreOffice将PPT转换为PDF
 async function convertPPTToImages(inputPath) {
   return new Promise((resolve) => {
+    const startTime = Date.now();
+    console.log('🚀 开始PPT转图片转换:', inputPath);
+    
     if (!fs.existsSync(PPT_TO_IMAGES_PATH)) {
       console.error('ppt-to-images.exe工具未找到:', PPT_TO_IMAGES_PATH);
+      const duration = Date.now() - startTime;
+      console.log(`❌ PPT转换失败，耗时: ${duration}ms`);
       resolve({ success: false, error: 'PPT转图片工具未找到' });
       return;
     }
@@ -1818,7 +2000,9 @@ async function convertPPTToImages(inputPath) {
       if (!resolved) {
         resolved = true;
         child.kill();
+        const duration = Date.now() - startTime;
         console.log('PPT转图片超时');
+        console.log(`❌ PPT转换失败，耗时: ${duration}ms`);
         resolve({ success: false, error: '转换超时' });
       }
     }, 30000);
@@ -1837,8 +2021,10 @@ async function convertPPTToImages(inputPath) {
         clearTimeout(timeout);
         
         if (code !== 0) {
+          const duration = Date.now() - startTime;
           console.error('PPT转图片失败，退出代码:', code);
           console.error('错误输出:', stderr);
+          console.log(`❌ PPT转换失败，耗时: ${duration}ms`);
           resolve({ success: false, error: `转换失败，退出代码: ${code}` });
           return;
         }
@@ -1851,7 +2037,19 @@ async function convertPPTToImages(inputPath) {
           // 尝试解析整个输出为JSON
            try {
              const jsonData = JSON.parse(stdout.trim());
-             if (jsonData.success && jsonData.slides && Array.isArray(jsonData.slides)) {
+             // 支持新的JSON格式：{"success": true, "images": [{"page": 1, "format": "png", "base64": "..."}]}
+             if (jsonData.success && jsonData.images && Array.isArray(jsonData.images)) {
+               for (const image of jsonData.images) {
+                 if (image.base64) {
+                   images.push({
+                     slideNumber: image.page || images.length + 1,
+                     base64: image.base64.startsWith('data:image/') ? image.base64 : `data:image/png;base64,${image.base64}`
+                   });
+                 }
+               }
+             }
+             // 兼容旧的JSON格式：{"success": true, "slides": [{"slide_number": 1, "base64_image": "..."}]}
+             else if (jsonData.success && jsonData.slides && Array.isArray(jsonData.slides)) {
                for (const slide of jsonData.slides) {
                  if (slide.base64_image) {
                    images.push({
@@ -1889,15 +2087,20 @@ async function convertPPTToImages(inputPath) {
            }
           
           if (images.length > 0) {
-            console.log(`PPT转换成功，共${images.length}张幻灯片`);
+            const duration = Date.now() - startTime;
+            console.log(`✅ PPT转换成功，共${images.length}张幻灯片，耗时: ${duration}ms`);
             resolve({ success: true, images });
           } else {
+            const duration = Date.now() - startTime;
             console.error('未找到有效的图片数据');
             console.log('工具输出内容:', stdout.substring(0, 500) + '...');
+            console.log(`❌ PPT转换失败，耗时: ${duration}ms`);
             resolve({ success: false, error: '未找到有效的图片数据' });
           }
         } catch (error) {
+          const duration = Date.now() - startTime;
           console.error('处理转换结果失败:', error);
+          console.log(`❌ PPT转换失败，耗时: ${duration}ms`);
           resolve({ success: false, error: '处理转换结果失败' });
         }
       }
@@ -1907,7 +2110,9 @@ async function convertPPTToImages(inputPath) {
        if (!resolved) {
          resolved = true;
          clearTimeout(timeout);
+         const duration = Date.now() - startTime;
          console.error('PPT转图片进程错误:', error.message);
+         console.log(`❌ PPT转换失败，耗时: ${duration}ms`);
          resolve({ success: false, error: error.message });
        }
      });

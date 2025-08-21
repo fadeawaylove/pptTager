@@ -26,6 +26,82 @@ let currentMainPreviewPath = null; // 当前主预览文件路径
 let previewAbortControllers = new Map(); // 预览任务的中止控制器
 let currentPreviewPath = null; // 当前预览的PDF路径，用于切换预览模式
 
+// 图片内存缓存
+// LRU缓存实现
+class LRUCache {
+    constructor(capacity = 10) {
+        this.capacity = capacity;
+        this.cache = new Map();
+    }
+    
+    get(key) {
+        if (this.cache.has(key)) {
+            // 移动到最新位置
+            const value = this.cache.get(key);
+            this.cache.delete(key);
+            this.cache.set(key, value);
+            return value;
+        }
+        return null;
+    }
+    
+    set(key, value) {
+        if (this.cache.has(key)) {
+            // 更新现有项
+            this.cache.delete(key);
+        } else if (this.cache.size >= this.capacity) {
+            // 删除最旧的项
+            const firstKey = this.cache.keys().next().value;
+            this.cache.delete(firstKey);
+            console.log(`LRU缓存已满，移除最旧项: ${firstKey}`);
+        }
+        this.cache.set(key, value);
+        console.log(`LRU缓存添加项: ${key}，当前大小: ${this.cache.size}`);
+    }
+    
+    has(key) {
+        return this.cache.has(key);
+    }
+    
+    size() {
+        return this.cache.size;
+    }
+    
+    clear() {
+        this.cache.clear();
+        console.log('LRU缓存已清空');
+    }
+}
+
+// 创建LRU缓存实例，默认缓存10个图片
+let imageMemoryCache = new LRUCache(10);
+
+// 文件MD5缓存，用于存储文件路径到MD5的映射
+let fileMD5Cache = new Map();
+
+// 计算文件MD5值的函数
+async function getFileMD5(filePath) {
+    // 如果已经缓存了MD5值，直接返回
+    if (fileMD5Cache.has(filePath)) {
+        return fileMD5Cache.get(filePath);
+    }
+    
+    try {
+        // 通过IPC请求主进程计算文件MD5
+        const md5Hash = await ipcRenderer.invoke('get-file-md5', filePath);
+        if (md5Hash) {
+            fileMD5Cache.set(filePath, md5Hash);
+            return md5Hash;
+        }
+    } catch (error) {
+        console.error('计算文件MD5失败:', error);
+    }
+    
+    // 如果MD5计算失败，使用文件路径作为备用
+    const fallbackHash = btoa(filePath).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+    return fallbackHash;
+}
+
 // 文件监控相关变量
 let isFileWatchingEnabled = false;
 let backgroundTaskStatus = {
@@ -36,6 +112,8 @@ let backgroundTaskStatus = {
   watchedFolder: null
 };
 let statusUpdateInterval = null;
+
+
 
 // DOM元素
 // selectFolderBtn已移除，选择文件夹功能已移至设置中
@@ -125,7 +203,7 @@ const previewTagsEl = document.getElementById('previewTags');
 const embeddedPDFViewer = document.getElementById('embeddedPDFViewer');
 const pdfPagesContainer = document.getElementById('pdfPagesContainer');
 const pdfPages = document.getElementById('pdfPages');
-const pdfPageInfo = document.getElementById('pdfPageInfo');
+// const pdfPageInfo = document.getElementById('pdfPageInfo'); // 已移除页码信息显示
 const pdfZoomSelect = document.getElementById('pdfZoomSelect');
 const pdfZoomOut = document.getElementById('pdfZoomOut');
 const pdfZoomIn = document.getElementById('pdfZoomIn');
@@ -135,7 +213,7 @@ let currentPDFDoc = null;
 let currentPDFScale = 1;
 let currentPDFPage = 1;
 let totalPDFPages = 0;
-let isFitToWidth = true; // 默认使用适应宽度模式
+let isFitToWidth = false; // 不再使用适应宽度模式，默认为false
 
 // 初始化PDF.js
 if (typeof pdfjsLib !== 'undefined') {
@@ -328,7 +406,7 @@ document.getElementById('retryPreviewBtn').addEventListener('click', retryPrevie
 if (pdfZoomOut) {
     pdfZoomOut.addEventListener('click', () => {
         if (currentPDFScale > 0.5) {
-            isFitToWidth = false;
+            // isFitToWidth = false; // 已移除适应宽度模式
             currentPDFScale -= 0.25;
             renderAllPDFPages();
             updatePDFZoomSelect();
@@ -339,7 +417,7 @@ if (pdfZoomOut) {
 if (pdfZoomIn) {
     pdfZoomIn.addEventListener('click', () => {
         if (currentPDFScale < 3) {
-            isFitToWidth = false;
+            // isFitToWidth = false; // 已移除适应宽度模式
             currentPDFScale += 0.25;
             renderAllPDFPages();
             updatePDFZoomSelect();
@@ -351,10 +429,10 @@ if (pdfZoomSelect) {
     pdfZoomSelect.addEventListener('change', (e) => {
         const value = e.target.value;
         if (value === 'fit') {
-            isFitToWidth = true;
+            // isFitToWidth = true; // 已移除适应宽度模式
             fitPDFToWidth();
         } else {
-            isFitToWidth = false;
+            // isFitToWidth = false; // 已移除适应宽度模式
             currentPDFScale = parseFloat(value);
             renderAllPDFPages();
         }
@@ -1151,6 +1229,16 @@ async function showPreview() {
         previewCache.delete(file.path);
     }
     
+    // 清除前端MD5缓存，确保重新计算文件MD5
+    if (fileMD5Cache.has(file.path)) {
+        fileMD5Cache.delete(file.path);
+        console.log('清除前端MD5缓存:', file.path);
+    }
+    
+    // 清除前端LRU图片缓存，确保使用新的图片数据
+    imageMemoryCache.clear();
+    console.log('清除前端LRU图片缓存');
+    
     // 启动预览生成请求（不等待结果）
     requestPreview(file.path, true).catch(error => {
         console.error('获取预览失败:', error);
@@ -1236,7 +1324,7 @@ async function displayPreviewResult(result, filePath) {
         console.log('检测到图片数据，使用图片预览模式');
         // 使用图片预览模式
         try {
-            await showImagePreview(result.images);
+            await showImagePreview(result.images, filePath);
             console.log('图片预览显示成功，共', result.images.length, '张');
             hideRetryButton();
         } catch (error) {
@@ -3155,10 +3243,13 @@ document.addEventListener('keydown', (event) => {
 });
 
 // 图片预览功能函数
-function showImagePreview(images) {
+async function showImagePreview(images, filePath) {
     if (!embeddedPDFViewer || !images || images.length === 0) return;
     
     console.log('显示图片预览，共', images.length, '张');
+    
+    // 设置当前预览路径
+    currentPreviewPath = filePath;
     
     // 隐藏其他预览元素
     previewImage.classList.add('hidden');
@@ -3168,7 +3259,7 @@ function showImagePreview(images) {
     embeddedPDFViewer.classList.remove('hidden');
     
     // 加载图片
-    loadImagePreviewFromBase64(images);
+    await loadImagePreviewFromBase64(images);
 }
 
 // 嵌入式PDF查看器功能函数
@@ -3208,7 +3299,7 @@ function hideEmbeddedPDFViewer() {
     currentPDFPage = 1;
     totalPDFPages = 0;
     currentPDFScale = 1;
-    isFitToWidth = true; // 重置为适应宽度模式
+    // isFitToWidth = true; // 已移除适应宽度模式
 }
 
 async function loadEmbeddedPDF(pdfPath) {
@@ -3339,19 +3430,13 @@ async function renderAllPDFPages() {
 }
 
 function updatePDFPageInfo() {
-    if (pdfPageInfo && totalPDFPages > 0) {
-        pdfPageInfo.textContent = `共 ${totalPDFPages} 页`;
-    }
+  // 页码信息显示已移除
 }
 
 function updatePDFZoomSelect() {
     if (pdfZoomSelect) {
-        // 检查当前缩放是否是通过"适应宽度"设置的
-        if (isFitToWidth) {
-            pdfZoomSelect.value = 'fit';
-        } else {
-            pdfZoomSelect.value = currentPDFScale.toString();
-        }
+        // 直接设置当前缩放值
+        pdfZoomSelect.value = currentPDFScale.toString();
     }
 }
 
@@ -3389,9 +3474,11 @@ let currentImagePaths = [];
 let currentImageIndex = 0;
 
 // 加载base64图片预览
-function loadImagePreviewFromBase64(images) {
+async function loadImagePreviewFromBase64(images) {
     try {
         console.log('开始加载base64图片预览，共', images.length, '张');
+        
+        // 移除内存缓存清理逻辑
         
         // 显示加载状态
         const pdfPagesContainer = document.getElementById('pdfPagesContainer');
@@ -3406,7 +3493,7 @@ function loadImagePreviewFromBase64(images) {
         console.log('加载图片预览，共', images.length, '张');
         
         // 显示图片预览
-        displayBase64ImagePreview();
+        await displayBase64ImagePreview();
         
         // 更新页面信息
         updateImagePageInfo();
@@ -3477,17 +3564,24 @@ async function loadImagePreview(pdfPath) {
 }
 
 // 显示base64图片预览
-function displayBase64ImagePreview() {
+async function displayBase64ImagePreview() {
     const pdfPagesContainer = document.getElementById('pdfPagesContainer');
     if (!pdfPagesContainer || currentImagePaths.length === 0) {
         return;
     }
     
+    console.log('开始显示图片预览，使用内存缓存优化');
+    
     // 清空容器
     pdfPagesContainer.innerHTML = '';
     
+    // 获取文件MD5用于缓存键
+    const filePath = currentPreviewPath || 'unknown';
+    const fileMD5 = await getFileMD5(filePath);
+    
     // 创建图片容器
-    currentImagePaths.forEach((imageData, index) => {
+    for (let index = 0; index < currentImagePaths.length; index++) {
+        const imageData = currentImagePaths[index];
         const imageContainer = document.createElement('div');
         imageContainer.className = 'image-page-container';
         imageContainer.style.cssText = `
@@ -3499,26 +3593,47 @@ function displayBase64ImagePreview() {
             background: white;
         `;
         
-        const img = document.createElement('img');
-        // 处理图片数据，可能是对象或字符串
+        // 处理图片数据
         const base64Src = typeof imageData === 'object' ? imageData.base64 : imageData;
-        img.src = base64Src;
+        
+        // 生成缓存键 - 使用文件MD5和页码确保唯一性
+        const cacheKey = `img_${fileMD5}_${index}`;
+        
+        // 检查LRU缓存
+        let img = imageMemoryCache.get(cacheKey);
+        if (img) {
+            console.log(`使用LRU缓存: 第${index + 1}页`);
+            // 克隆缓存的图片元素
+            img = img.cloneNode(true);
+        } else {
+            console.log(`创建新图片元素: 第${index + 1}页`);
+            img = document.createElement('img');
+            img.src = base64Src;
+            
+            // 图片加载完成后添加到LRU缓存
+            img.onload = function() {
+                console.log(`图片加载完成，添加到LRU缓存: 第${index + 1}页`);
+                imageMemoryCache.set(cacheKey, this.cloneNode(true));
+            };
+            
+            // 添加加载错误处理
+            img.onerror = function() {
+                console.error(`图片加载失败: 第${index + 1}页`);
+                this.src = '';
+                this.alt = `第 ${index + 1} 页加载失败`;
+                this.style.cssText += 'border: 2px dashed #ccc; padding: 20px; color: #999;';
+            };
+        }
+        
         img.style.cssText = `
-            max-width: 100%;
+            width: 100%;
             height: auto;
             border-radius: 4px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         `;
         
-        // 添加加载错误处理
-        img.onerror = function() {
-            this.src = '';
-            this.alt = `第 ${index + 1} 页加载失败`;
-            this.style.cssText += 'border: 2px dashed #ccc; padding: 20px; color: #999;';
-        };
-        
         const pageLabel = document.createElement('div');
-        pageLabel.textContent = `第 ${index + 1} 页`;
+        pageLabel.textContent = `第 ${index + 1} 页 / 共 ${currentImagePaths.length} 页`;
         pageLabel.style.cssText = `
             margin-top: 10px;
             color: #666;
@@ -3528,7 +3643,9 @@ function displayBase64ImagePreview() {
         imageContainer.appendChild(img);
         imageContainer.appendChild(pageLabel);
         pdfPagesContainer.appendChild(imageContainer);
-    });
+    }
+    
+    console.log('图片预览显示完成');
 }
 
 // 显示图片预览（原有的文件路径方式，保留兼容性）
@@ -3557,14 +3674,14 @@ function displayImagePreview() {
         const img = document.createElement('img');
         img.src = `file://${imagePath}`;
         img.style.cssText = `
-            max-width: 100%;
+            width: 100%;
             height: auto;
             border-radius: 4px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         `;
         
         const pageLabel = document.createElement('div');
-        pageLabel.textContent = `第 ${index + 1} 页`;
+        pageLabel.textContent = `第 ${index + 1} 页 / 共 ${currentImagePaths.length} 页`;
         pageLabel.style.cssText = `
             margin-top: 10px;
             color: #666;
@@ -3579,10 +3696,7 @@ function displayImagePreview() {
 
 // 更新图片页面信息
 function updateImagePageInfo() {
-    const pageInfo = document.getElementById('pdfPageInfo');
-    if (pageInfo && currentImagePaths.length > 0) {
-        pageInfo.textContent = `共 ${currentImagePaths.length} 页`;
-    }
+  // 页码信息显示已移除
 }
 
 // 切换预览模式
