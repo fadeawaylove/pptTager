@@ -1,0 +1,2 @@
+# This file ensures the bin directory is tracked by git
+# The bin directory contains the ppt-to-images.exe executable
