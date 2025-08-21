@@ -94,6 +94,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
+    "extraResources": [
+      {
+        "from": "bin/",
+        "to": "bin/"
+      }
+    ],
     "extraMetadata": {
       "main": "main.js"
     },

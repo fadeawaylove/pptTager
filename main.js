@@ -7,7 +7,10 @@ const https = require('https');
 const crypto = require('crypto');
 
 // PPT转图片工具路径
-const PPT_TO_IMAGES_PATH = path.join(__dirname, 'bin', 'ppt-to-images.exe');
+// 在开发环境中使用相对路径，在打包环境中使用 process.resourcesPath
+const PPT_TO_IMAGES_PATH = app.isPackaged 
+  ? path.join(process.resourcesPath, 'bin', 'ppt-to-images.exe')
+  : path.join(__dirname, 'bin', 'ppt-to-images.exe');
 // 移除了 chokidar 和 osUtils 依赖
 
 // 全局变量跟踪自动更新模式
