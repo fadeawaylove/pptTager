@@ -5,6 +5,7 @@ const { exec, spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 const crypto = require('crypto');
+const fileWatcher = require('./file-watcher');
 
 // PPT转图片工具路径
 // 在开发环境中使用相对路径，在打包环境中使用 process.resourcesPath
@@ -196,6 +197,9 @@ function createWindow() {
     }
     // 如果用户选择取消，什么都不做，窗口保持打开
   });
+  
+  // 设置文件监控模块的主窗口引用
+  fileWatcher.setMainWindow(mainWindow);
 }
 
 // 禁用GPU加速以解决兼容性问题
@@ -206,6 +210,8 @@ app.whenReady().then(createWindow);
 
 // 所有窗口关闭时退出应用（macOS除外）
 app.on('window-all-closed', () => {
+  // 清理文件监控
+  fileWatcher.stopWatchingFile();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -685,6 +691,36 @@ function escapeXml(unsafe) {
     }
   });
 }
+
+// 文件监控相关IPC处理程序
+ipcMain.handle('start-file-watching', async (event, filePath) => {
+  try {
+    fileWatcher.startWatchingFile(filePath);
+    return { success: true };
+  } catch (error) {
+    console.error('启动文件监控失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('stop-file-watching', async () => {
+  try {
+    fileWatcher.stopWatchingFile();
+    return { success: true };
+  } catch (error) {
+    console.error('停止文件监控失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-file-watch-status', async () => {
+  try {
+    return fileWatcher.getWatchStatus();
+  } catch (error) {
+    console.error('获取文件监控状态失败:', error);
+    return { isWatching: false, filePath: null };
+  }
+});
 
 // PDF转图片处理
 ipcMain.handle('convert-pdf-to-images', async (event, pdfPath) => {

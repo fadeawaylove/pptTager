@@ -1247,6 +1247,9 @@ async function showPreview() {
     // 启动新的检查
     checkPreviewFileGeneration(file.path);
     
+    // 启动文件监控
+    startFileWatching(file.path);
+    
     // 预加载功能已禁用
     // preloadAdjacentPreviews();
     
@@ -1539,6 +1542,9 @@ function closePreviewModal() {
     
     // 终止所有预览任务
     terminateAllPreviewTasks();
+    
+    // 停止文件监控
+    stopFileWatching();
     
     // 优化：智能缓存清理 - 只保留最近的10个预览缓存
     if (previewCache.size > 10) {
@@ -3801,3 +3807,72 @@ if (document.readyState === 'loading') {
 } else {
     setTimeout(initScrollButtons, 100);
 }
+
+// 文件监控相关变量
+let currentWatchedFile = null;
+
+// 启动文件监控
+async function startFileWatching(filePath) {
+    try {
+        // 停止之前的监控
+        await stopFileWatching();
+        
+        // 启动新的文件监控
+        const result = await ipcRenderer.invoke('start-file-watching', filePath);
+        if (result.success) {
+            currentWatchedFile = filePath;
+            console.log('开始监控文件:', filePath);
+        } else {
+            console.error('启动文件监控失败:', result.error);
+        }
+    } catch (error) {
+        console.error('启动文件监控时发生错误:', error);
+    }
+}
+
+// 停止文件监控
+async function stopFileWatching() {
+    try {
+        if (currentWatchedFile) {
+            const result = await ipcRenderer.invoke('stop-file-watching');
+            if (result.success) {
+                console.log('停止监控文件:', currentWatchedFile);
+                currentWatchedFile = null;
+            } else {
+                console.error('停止文件监控失败:', result.error);
+            }
+        }
+    } catch (error) {
+        console.error('停止文件监控时发生错误:', error);
+    }
+}
+
+// 监听文件变化事件
+ipcRenderer.on('file-changed', async (event, data) => {
+    console.log('检测到文件变化:', data.filePath);
+    
+    // 检查是否是当前预览的文件
+    if (currentWatchedFile && data.filePath === currentWatchedFile) {
+        console.log('当前预览文件发生变化，准备重新生成预览');
+        
+        // 清除相关缓存
+        previewCache.delete(currentWatchedFile);
+        fileMD5Cache.delete(currentWatchedFile);
+        imageMemoryCache.clear();
+        
+        // 显示通知
+        showNotification('检测到文件变化，正在重新生成预览...', 'info');
+        
+        // 延迟一点时间再重新生成，避免文件还在写入中
+        setTimeout(async () => {
+            try {
+                // 重新生成预览
+                await showPreview();
+                showNotification('预览已更新', 'success');
+            } catch (error) {
+                console.error('重新生成预览失败:', error);
+                showNotification('重新生成预览失败', 'error');
+            }
+        }, 1000);
+    }
+});
