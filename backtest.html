@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>专业复盘工具 - 基于 TradingView Lightweight Charts</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            overflow: hidden;
+        }
+        
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background-color: #f8f9fa;
+            border-right: 1px solid #e0e0e0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .toolbar {
+            height: 60px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+        }
+        
+        .chart-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chart-container {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
+            height: 100%;
+        }
+        
+        .status-bar {
+            height: 30px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 12px;
+            color: #666666;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            background-color: #007bff;
+            color: white;
+            border: 1px solid #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #0056b3;
+            border-color: #0056b3;
+        }
+        
+        .btn:disabled {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .btn.secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        
+        .btn.secondary:hover {
+            background-color: #545b62;
+            border-color: #545b62;
+        }
+        
+        .btn.danger {
+            background-color: #f23645;
+        }
+        
+        .btn.danger:hover {
+            background-color: #d1304b;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .separator {
+            width: 1px;
+            height: 20px;
+            background-color: #e0e0e0;
+            margin: 0 10px;
+        }
+        
+        select, input {
+            padding: 6px 8px;
+            background-color: #ffffff;
+            color: #333333;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .sidebar h3 {
+            color: #007bff;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .control-section {
+            margin-bottom: 30px;
+        }
+        
+        .control-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 2px 0;
+        }
+        
+        .control-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .control-item.active {
+            background-color: #e3f2fd;
+            border-left: 3px solid #007bff;
+        }
+        
+        .drawing-tools {
+            margin-bottom: 30px;
+        }
+        
+        .tool-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 2px 0;
+        }
+        
+        .tool-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .tool-item.active {
+            background-color: #e3f2fd;
+            border-left: 3px solid #007bff;
+        }
+        
+        .replay-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #e0e0e0;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #007bff;
+            transition: width 0.3s ease;
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .speed-slider {
+            flex: 1;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 左侧边栏 -->
+        <div class="sidebar">
+            <!-- 复盘信息 -->
+            <div class="replay-info">
+                <div class="info-row">
+                    <span>总K线数:</span>
+                    <span id="totalBars">-</span>
+                </div>
+                <div class="info-row">
+                    <span>当前位置:</span>
+                    <span id="currentBar">-</span>
+                </div>
+                <div class="info-row">
+                    <span>当前时间:</span>
+                    <span id="currentTime">-</span>
+                </div>
+                <div class="info-row">
+                    <span>当前价格:</span>
+                    <span id="currentPrice">-</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- 播放控制 -->
+            <div class="control-section">
+                <h3>播放控制</h3>
+                <div class="control-item" onclick="prevCandle()">
+                    <span>⏮️ 上一根</span>
+                </div>
+                <div class="control-item" id="playPauseBtn" onclick="togglePlay()">
+                    <span>▶️ 播放</span>
+                </div>
+                <div class="control-item" onclick="nextCandle()">
+                    <span>⏭️ 下一根</span>
+                </div>
+                <div class="speed-control">
+                    <span>速度:</span>
+                    <input type="range" id="speedSlider" class="speed-slider" min="1" max="10" value="3">
+                    <span id="speedValue">3x</span>
+                </div>
+            </div>
+
+            <!-- 日期控制 -->
+            <div class="control-section">
+                <h3>日期选择</h3>
+                <input type="date" id="dateInput" style="width: 100%; margin-bottom: 10px;">
+                <div class="control-item" onclick="randomDate()">
+                    <span>🎲 随机日期</span>
+                </div>
+            </div>
+
+            <!-- 绘图工具 -->
+            <div class="control-section drawing-tools">
+                <h3>绘图工具</h3>
+                <div class="tool-item" data-tool="line">
+                    <span>📏 趋势线</span>
+                </div>
+                <div class="tool-item" data-tool="parallel">
+                    <span>⫽ 平行线</span>
+                </div>
+                <div class="tool-item" data-tool="fibonacci">
+                    <span>🌀 斐波那契</span>
+                </div>
+                <div class="tool-item" data-tool="rectangle">
+                    <span>⬜ 矩形</span>
+                </div>
+                <div class="tool-item" data-tool="arrow-up">
+                    <span>⬆️ 看涨标记</span>
+                </div>
+                <div class="tool-item" data-tool="arrow-down">
+                    <span>⬇️ 看跌标记</span>
+                </div>
+                <div class="tool-item danger" onclick="clearDrawings()">
+                    <span>🗑️ 清除绘图</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主内容区域 -->
+        <div class="main-content">
+            <!-- 顶部工具栏 -->
+            <div class="toolbar">
+                <button class="btn secondary" onclick="goBack()">
+                    ← 返回主页
+                </button>
+                <div class="separator"></div>
+                <span style="font-weight: bold;">📈 专业复盘工具</span>
+                <div style="margin-left: auto;">
+                    <span id="statusText" style="color: #787b86;">就绪</span>
+                </div>
+            </div>
+
+            <!-- 图表区域 -->
+            <div class="chart-area">
+                <div id="chartContainer" class="chart-container"></div>
+            </div>
+
+            <!-- 状态栏 -->
+            <div class="status-bar">
+                <span>5分钟K线图</span>
+                <div style="margin-left: auto;">
+                    <span id="startDate">-</span> ~ <span id="endDate">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="backtest.js"></script>
+</body>
+</html>

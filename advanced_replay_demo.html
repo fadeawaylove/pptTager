@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>专业复盘软件 - 基于 TradingView Lightweight Charts</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #131722;
+            color: #d1d4dc;
+            overflow: hidden;
+        }
+        
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background-color: #1e222d;
+            border-right: 1px solid #2a2e39;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .toolbar {
+            height: 60px;
+            background-color: #1e222d;
+            border-bottom: 1px solid #2a2e39;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+        }
+        
+        .chart-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chart-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        .status-bar {
+            height: 30px;
+            background-color: #1e222d;
+            border-top: 1px solid #2a2e39;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 12px;
+            color: #787b86;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            background-color: #2962ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #1e53e5;
+        }
+        
+        .btn:disabled {
+            background-color: #434651;
+            cursor: not-allowed;
+        }
+        
+        .btn.secondary {
+            background-color: #434651;
+        }
+        
+        .btn.secondary:hover {
+            background-color: #4a4d5a;
+        }
+        
+        .btn.danger {
+            background-color: #f23645;
+        }
+        
+        .btn.danger:hover {
+            background-color: #d1304b;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .separator {
+            width: 1px;
+            height: 20px;
+            background-color: #2a2e39;
+            margin: 0 10px;
+        }
+        
+        select {
+            padding: 6px 8px;
+            background-color: #2a2e39;
+            color: #d1d4dc;
+            border: 1px solid #434651;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .sidebar h3 {
+            color: #2962ff;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .indicator-list {
+            margin-bottom: 30px;
+        }
+        
+        .indicator-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 2px 0;
+        }
+        
+        .indicator-item:hover {
+            background-color: #2a2e39;
+        }
+        
+        .indicator-item.active {
+            background-color: #2962ff20;
+            border-left: 3px solid #2962ff;
+        }
+        
+        .indicator-checkbox {
+            margin-right: 8px;
+        }
+        
+        .drawing-tools {
+            margin-bottom: 30px;
+        }
+        
+        .tool-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 2px 0;
+        }
+        
+        .tool-item:hover {
+            background-color: #2a2e39;
+        }
+        
+        .tool-item.active {
+            background-color: #2962ff20;
+            border-left: 3px solid #2962ff;
+        }
+        
+        .replay-info {
+            background-color: #2a2e39;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #434651;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #2962ff;
+            transition: width 0.3s ease;
+        }
+        
+        .timeframe-selector {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .timeframe-btn {
+            padding: 6px 10px;
+            background-color: #2a2e39;
+            color: #787b86;
+            border: 1px solid #434651;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        
+        .timeframe-btn:hover {
+            background-color: #434651;
+        }
+        
+        .timeframe-btn.active {
+            background-color: #2962ff;
+            color: white;
+            border-color: #2962ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <h3>📊 技术指标</h3>
+            <div class="indicator-list">
+                <div class="indicator-item" data-indicator="ma">
+                    <input type="checkbox" class="indicator-checkbox" id="ma-check">
+                    <label for="ma-check">移动平均线 (MA)</label>
+                </div>
+                <div class="indicator-item" data-indicator="ema">
+                    <input type="checkbox" class="indicator-checkbox" id="ema-check">
+                    <label for="ema-check">指数移动平均 (EMA)</label>
+                </div>
+                <div class="indicator-item" data-indicator="bollinger">
+                    <input type="checkbox" class="indicator-checkbox" id="bollinger-check">
+                    <label for="bollinger-check">布林带 (BOLL)</label>
+                </div>
+                <div class="indicator-item" data-indicator="volume">
+                    <input type="checkbox" class="indicator-checkbox" id="volume-check" checked>
+                    <label for="volume-check">成交量</label>
+                </div>
+            </div>
+            
+            <h3>🎨 绘图工具</h3>
+            <div class="drawing-tools">
+                <div class="tool-item" data-tool="trend-line">
+                    📈 趋势线
+                </div>
+                <div class="tool-item" data-tool="horizontal-line">
+                    ➖ 水平线
+                </div>
+                <div class="tool-item" data-tool="fibonacci">
+                    🌀 斐波那契回调
+                </div>
+                <div class="tool-item" data-tool="rectangle">
+                    ⬜ 矩形
+                </div>
+            </div>
+            
+            <h3>⏱️ 时间周期</h3>
+            <div class="timeframe-selector">
+                <button class="timeframe-btn" data-timeframe="1m">1分</button>
+                <button class="timeframe-btn" data-timeframe="5m">5分</button>
+                <button class="timeframe-btn" data-timeframe="15m">15分</button>
+                <button class="timeframe-btn active" data-timeframe="1h">1小时</button>
+                <button class="timeframe-btn" data-timeframe="1d">日线</button>
+            </div>
+            
+            <h3>📈 回放信息</h3>
+            <div class="replay-info">
+                <div class="info-row">
+                    <span>当前时间:</span>
+                    <span id="current-time">--</span>
+                </div>
+                <div class="info-row">
+                    <span>开盘价:</span>
+                    <span id="open-price">--</span>
+                </div>
+                <div class="info-row">
+                    <span>最高价:</span>
+                    <span id="high-price">--</span>
+                </div>
+                <div class="info-row">
+                    <span>最低价:</span>
+                    <span id="low-price">--</span>
+                </div>
+                <div class="info-row">
+                    <span>收盘价:</span>
+                    <span id="close-price">--</span>
+                </div>
+                <div class="info-row">
+                    <span>成交量:</span>
+                    <span id="volume">--</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                
+                <div class="info-row">
+                    <span>进度:</span>
+                    <span id="progress-text">0/0</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 工具栏 -->
+            <div class="toolbar">
+                <div class="control-group">
+                    <button class="btn" id="play-btn">▶️ 播放</button>
+                    <button class="btn secondary" id="pause-btn" disabled>⏸️ 暂停</button>
+                    <button class="btn secondary" id="step-btn">⏭️ 单步</button>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <div class="control-group">
+                    <label>速度:</label>
+                    <select id="speed-select">
+                        <option value="2000">0.5x</option>
+                        <option value="1000">1x</option>
+                        <option value="500" selected>2x</option>
+                        <option value="250">4x</option>
+                        <option value="100">10x</option>
+                    </select>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <div class="control-group">
+                    <button class="btn secondary" id="reset-btn">🔄 重置</button>
+                    <button class="btn danger" id="clear-drawings-btn">🗑️ 清除绘图</button>
+                </div>
+                
+                <div style="margin-left: auto;">
+                    <span id="symbol-info">AG9999.XSGE - 白银期货专业复盘模式</span>
+                </div>
+            </div>
+            
+            <!-- 图表区域 -->
+            <div class="chart-area">
+                <div id="chart" class="chart-container"></div>
+            </div>
+            
+            <!-- 状态栏 -->
+            <div class="status-bar">
+                <span id="status-text">准备开始回放...</span>
+                <div style="margin-left: auto;">
+                    <span>基于 TradingView Lightweight Charts | 白银期货数据回放</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let chart, candlestickSeries, volumeSeries;
+        let fullData = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let indicators = {};
+        
+        // 读取CSV数据
+        async function loadCSVData() {
+            try {
+                const response = await fetch('data_with_ema.csv');
+                const csvText = await response.text();
+                return parseCSVData(csvText);
+            } catch (error) {
+                console.error('无法加载CSV数据，使用模拟数据:', error);
+                return generateRealisticKlineData(200);
+            }
+        }
+        
+        // 解析CSV数据
+        function parseCSVData(csvText) {
+            const lines = csvText.split('\n');
+            const data = [];
+            
+            // 跳过标题行，从第二行开始
+            for (let i = 1; i < lines.length && i < 1001; i++) { // 限制前1000条数据
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const columns = line.split(',');
+                if (columns.length < 8) continue;
+                
+                try {
+                    // CSV格式: index,open,close,high,low,volume,index_code,bar_count,datetime,EMA20,EMA220
+                    const datetime = columns[8]; // datetime列
+                    const open = parseFloat(columns[1]);
+                    const close = parseFloat(columns[2]);
+                    const high = parseFloat(columns[3]);
+                    const low = parseFloat(columns[4]);
+                    const volume = parseFloat(columns[5]) || Math.floor(Math.random() * 100000 + 50000);
+                    
+                    // 解析日期时间
+                    const date = new Date(datetime);
+                    if (isNaN(date.getTime())) continue;
+                    
+                    data.push({
+                        time: Math.floor(date.getTime() / 1000),
+                        open: open,
+                        high: high,
+                        low: low,
+                        close: close,
+                        volume: volume
+                    });
+                } catch (e) {
+                    continue; // 跳过解析错误的行
+                }
+            }
+            
+            // 按时间排序
+            data.sort((a, b) => a.time - b.time);
+            return data;
+        }
+        
+        // 生成更真实的K线数据（备用）
+        function generateRealisticKlineData(count = 200) {
+            const data = [];
+            let basePrice = 6000; // 白银价格
+            const startTime = new Date('2024-01-01').getTime() / 1000;
+            
+            for (let i = 0; i < count; i++) {
+                const time = startTime + i * 60 * 60; // 小时数据
+                
+                // 更真实的价格波动模型
+                const trend = Math.sin(i / 20) * 0.02; // 长期趋势
+                const volatility = (Math.random() - 0.5) * 0.05; // 随机波动
+                const change = (trend + volatility) * basePrice;
+                
+                const open = basePrice;
+                const close = open + change;
+                const high = Math.max(open, close) * (1 + Math.random() * 0.02);
+                const low = Math.min(open, close) * (1 - Math.random() * 0.02);
+                const volume = Math.floor(Math.random() * 100000 + 50000);
+                
+                data.push({
+                    time: time,
+                    open: parseFloat(open.toFixed(2)),
+                    high: parseFloat(high.toFixed(2)),
+                    low: parseFloat(low.toFixed(2)),
+                    close: parseFloat(close.toFixed(2)),
+                    volume: volume
+                });
+                
+                basePrice = close;
+            }
+            
+            return data;
+        }
+        
+        // 计算移动平均线
+        function calculateMA(data, period = 20) {
+            const ma = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    ma.push({ time: data[i].time, value: null });
+                } else {
+                    let sum = 0;
+                    for (let j = i - period + 1; j <= i; j++) {
+                        sum += data[j].close;
+                    }
+                    ma.push({
+                        time: data[i].time,
+                        value: parseFloat((sum / period).toFixed(2))
+                    });
+                }
+            }
+            return ma.filter(item => item.value !== null);
+        }
+        
+        // 计算EMA
+        function calculateEMA(data, period = 20) {
+            const ema = [];
+            const multiplier = 2 / (period + 1);
+            let emaValue = data[0].close;
+            
+            for (let i = 0; i < data.length; i++) {
+                if (i === 0) {
+                    emaValue = data[i].close;
+                } else {
+                    emaValue = (data[i].close * multiplier) + (emaValue * (1 - multiplier));
+                }
+                ema.push({
+                    time: data[i].time,
+                    value: parseFloat(emaValue.toFixed(2))
+                });
+            }
+            return ema;
+        }
+        
+        // 初始化图表
+        function initChart() {
+            const chartContainer = document.getElementById('chart');
+            
+            chart = LightweightCharts.createChart(chartContainer, {
+                width: chartContainer.clientWidth,
+                height: chartContainer.clientHeight,
+                layout: {
+                    background: { color: '#131722' },
+                    textColor: '#d1d4dc',
+                },
+                grid: {
+                    vertLines: { color: '#2B2B43' },
+                    horzLines: { color: '#2B2B43' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#485c7b',
+                },
+                timeScale: {
+                    borderColor: '#485c7b',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+            
+            // 创建K线图表
+            candlestickSeries = chart.addCandlestickSeries({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350'
+            });
+            
+            // 创建成交量系列
+            volumeSeries = chart.addHistogramSeries({
+                color: '#26a69a',
+                priceFormat: {
+                    type: 'volume',
+                },
+                priceScaleId: 'volume',
+            });
+            
+            chart.priceScale('volume').applyOptions({
+                scaleMargins: {
+                    top: 0.8,
+                    bottom: 0,
+                },
+            });
+        }
+        
+        // 更新图表显示
+        function updateChart() {
+            if (currentIndex < fullData.length) {
+                const displayData = fullData.slice(0, currentIndex + 1);
+                candlestickSeries.setData(displayData);
+                
+                // 更新成交量
+                const volumeData = displayData.map(item => ({
+                    time: item.time,
+                    value: item.volume,
+                    color: item.close >= item.open ? '#26a69a80' : '#ef535080'
+                }));
+                volumeSeries.setData(volumeData);
+                
+                // 更新指标
+                updateIndicators(displayData);
+                
+                // 更新信息面板
+                updateInfoPanel(fullData[currentIndex]);
+                
+                currentIndex++;
+                
+                // 自动调整视图
+                if (currentIndex > 50) {
+                    chart.timeScale().setVisibleRange({
+                        from: fullData[Math.max(0, currentIndex - 50)].time,
+                        to: fullData[currentIndex - 1].time
+                    });
+                }
+            } else {
+                stopPlayback();
+                document.getElementById('status-text').textContent = '回放完成！';
+            }
+        }
+        
+        // 更新指标
+        function updateIndicators(data) {
+            // 更新MA
+            if (indicators.ma && document.getElementById('ma-check').checked) {
+                const maData = calculateMA(data, 20);
+                indicators.ma.setData(maData);
+            }
+            
+            // 更新EMA
+            if (indicators.ema && document.getElementById('ema-check').checked) {
+                const emaData = calculateEMA(data, 20);
+                indicators.ema.setData(emaData);
+            }
+        }
+        
+        // 更新信息面板
+        function updateInfoPanel(candle) {
+            const date = new Date(candle.time * 1000);
+            document.getElementById('current-time').textContent = date.toLocaleString('zh-CN');
+            document.getElementById('open-price').textContent = candle.open.toFixed(2);
+            document.getElementById('high-price').textContent = candle.high.toFixed(2);
+            document.getElementById('low-price').textContent = candle.low.toFixed(2);
+            document.getElementById('close-price').textContent = candle.close.toFixed(2);
+            document.getElementById('volume').textContent = candle.volume.toLocaleString();
+            
+            // 更新进度
+            const progress = (currentIndex / fullData.length) * 100;
+            document.getElementById('progress-fill').style.width = progress + '%';
+            document.getElementById('progress-text').textContent = `${currentIndex}/${fullData.length}`;
+        }
+        
+        // 播放控制
+        function startPlayback() {
+            if (currentIndex >= fullData.length) return;
+            
+            isPlaying = true;
+            document.getElementById('play-btn').disabled = true;
+            document.getElementById('pause-btn').disabled = false;
+            document.getElementById('status-text').textContent = '正在回放...';
+            
+            const speed = parseInt(document.getElementById('speed-select').value);
+            playInterval = setInterval(updateChart, speed);
+        }
+        
+        function stopPlayback() {
+            isPlaying = false;
+            document.getElementById('play-btn').disabled = false;
+            document.getElementById('pause-btn').disabled = true;
+            document.getElementById('status-text').textContent = '回放已暂停';
+            
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+        }
+        
+        function resetPlayback() {
+            stopPlayback();
+            currentIndex = 0;
+            candlestickSeries.setData([]);
+            volumeSeries.setData([]);
+            
+            // 重置指标
+            Object.values(indicators).forEach(indicator => {
+                indicator.setData([]);
+            });
+            
+            document.getElementById('status-text').textContent = '准备开始回放...';
+            document.getElementById('progress-fill').style.width = '0%';
+            document.getElementById('progress-text').textContent = '0/' + fullData.length;
+            chart.timeScale().resetTimeScale();
+        }
+        
+        function stepForward() {
+            if (currentIndex < fullData.length) {
+                updateChart();
+            }
+        }
+        
+        // 指标管理
+        function toggleIndicator(type, checked) {
+            if (checked) {
+                switch (type) {
+                    case 'ma':
+                        indicators.ma = chart.addLineSeries({
+                            color: '#2196F3',
+                            lineWidth: 2,
+                            title: 'MA(20)'
+                        });
+                        break;
+                    case 'ema':
+                        indicators.ema = chart.addLineSeries({
+                            color: '#FF9800',
+                            lineWidth: 2,
+                            title: 'EMA(20)'
+                        });
+                        break;
+                }
+                
+                // 如果有数据，立即更新指标
+                if (currentIndex > 0) {
+                    const displayData = fullData.slice(0, currentIndex);
+                    updateIndicators(displayData);
+                }
+            } else {
+                if (indicators[type]) {
+                    chart.removeSeries(indicators[type]);
+                    delete indicators[type];
+                }
+            }
+        }
+        
+        // 事件监听
+        function setupEventListeners() {
+            // 播放控制
+            document.getElementById('play-btn').addEventListener('click', startPlayback);
+            document.getElementById('pause-btn').addEventListener('click', stopPlayback);
+            document.getElementById('reset-btn').addEventListener('click', resetPlayback);
+            document.getElementById('step-btn').addEventListener('click', stepForward);
+            
+            // 速度控制
+            document.getElementById('speed-select').addEventListener('change', () => {
+                if (isPlaying) {
+                    stopPlayback();
+                    startPlayback();
+                }
+            });
+            
+            // 指标控制
+            document.querySelectorAll('.indicator-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const indicator = e.target.closest('.indicator-item').dataset.indicator;
+                    toggleIndicator(indicator, e.target.checked);
+                });
+            });
+            
+            // 绘图工具
+            document.querySelectorAll('.tool-item').forEach(tool => {
+                tool.addEventListener('click', () => {
+                    document.querySelectorAll('.tool-item').forEach(t => t.classList.remove('active'));
+                    tool.classList.add('active');
+                    // 这里可以添加绘图工具的实际功能
+                });
+            });
+            
+            // 时间周期
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    // 这里可以添加切换时间周期的功能
+                });
+            });
+            
+            // 响应式调整
+            window.addEventListener('resize', () => {
+                const chartContainer = document.getElementById('chart');
+                chart.applyOptions({
+                    width: chartContainer.clientWidth,
+                    height: chartContainer.clientHeight,
+                });
+            });
+        }
+        
+        // 初始化应用
+        async function initApp() {
+            // 初始化图表
+            initChart();
+            
+            // 设置事件监听
+            setupEventListeners();
+            
+            // 默认启用成交量
+            document.getElementById('volume-check').checked = true;
+            
+            // 加载数据
+            document.getElementById('status-text').textContent = '正在加载数据...';
+            fullData = await loadCSVData();
+            
+            // 初始状态
+            if (fullData.length > 0) {
+                document.getElementById('status-text').textContent = `数据加载完成，共 ${fullData.length} 条白银期货数据`;
+                document.getElementById('progress-text').textContent = '0/' + fullData.length;
+            } else {
+                document.getElementById('status-text').textContent = '数据加载失败，请检查CSV文件';
+            }
+        }
+        
+        // 启动应用
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

@@ -585,6 +585,15 @@ if (pdfPagesContainer) {
     if (refreshFilesBtn) {
     refreshFilesBtn.addEventListener('click', refreshFilesFromMainPage);
 }
+    
+    // 复盘工具按钮
+    const backtestBtn = document.getElementById('backtestBtn');
+    if (backtestBtn) {
+        backtestBtn.addEventListener('click', () => {
+            window.location.href = 'backtest.html';
+        });
+    }
+    
     saveSettingsBtn.addEventListener('click', saveSettings);
     cancelSettingsBtn.addEventListener('click', closeSettingsModal);
     
