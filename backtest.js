@@ -547,14 +547,16 @@ function jumpToDate() {
         return;
     }
     
+    // 设置为当天的15:00作为最后一根K线
+    targetDate.setHours(15, 0, 0, 0);
     const targetTimestamp = targetDate.getTime() / 1000;
     
     // 找到最接近的K线
     let closestIndex = 0;
-    let minDiff = Math.abs(allData[0].time - targetTimestamp);
+    let minDiff = Math.abs(klineData[0].time - targetTimestamp);
     
-    for (let i = 1; i < allData.length; i++) {
-        const diff = Math.abs(allData[i].time - targetTimestamp);
+    for (let i = 1; i < klineData.length; i++) {
+        const diff = Math.abs(klineData[i].time - targetTimestamp);
         if (diff < minDiff) {
             minDiff = diff;
             closestIndex = i;
@@ -564,7 +566,7 @@ function jumpToDate() {
     currentIndex = closestIndex;
     updateChart();
     updateUI();
-    updateStatus(`跳转到 ${new Date(allData[currentIndex].time * 1000).toLocaleString()}`);
+    updateStatus(`跳转到 ${new Date(klineData[currentIndex].time * 1000).toLocaleString()}`);
 }
 
 // 跳转到随机日期
