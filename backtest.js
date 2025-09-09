@@ -231,6 +231,11 @@ function initializeChart() {
         borderUpColor: '#000000',
         wickDownColor: '#000000',
         wickUpColor: '#000000',
+         borderVisible: true,
+    borderWidth: 4,   // 👈 调节K线边框宽度，默认 1
+    // 影线宽度
+    wickVisible: true,
+    wickWidth: 4,
         priceFormat: {
             type: 'price',
             precision: 0,   // 小数位数
