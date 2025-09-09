@@ -382,22 +382,16 @@ function updateChart() {
         ema220Series.setData(ema220Data);
     }
     
-    // 优化缩放：以右边最新K线为中心，显示合适数量的K线
-    if (visibleData.length > 0) {
-        const visibleBars = Math.min(80, visibleData.length);
-        const currentBarIndex = visibleData.length - 1; // 当前最新K线的索引
-        
-        // 计算显示范围，以最新K线为右边界
-        const fromIndex = Math.max(0, currentBarIndex - visibleBars + 1);
-        const toIndex = currentBarIndex;
-        
-        if (fromIndex <= toIndex && toIndex < visibleData.length) {
-            chart.timeScale().setVisibleRange({
-                from: visibleData[fromIndex].time,
-                to: visibleData[toIndex].time,
-            });
-        }
+    // 不自动调整视窗位置，保持用户手动设置的视图范围
+    // 只在初次加载时设置默认视图
+    if (visibleData.length === 1) {
+        // 第一根K线时设置初始视图
+        chart.timeScale().setVisibleRange({
+            from: visibleData[0].time,
+            to: visibleData[0].time,
+        });
     }
+    // 其他情况下不调整视窗，让用户保持当前的视图位置
     
     updateCurrentTime();
     updateCurrentPrice();
