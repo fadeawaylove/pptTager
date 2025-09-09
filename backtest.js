@@ -8,6 +8,7 @@ let candlestickSeries = null;
 let barCountSeries = null;
 let ema20Series = null;
 let ema220Series = null;
+
 let klineData = [];
 let currentIndex = 0;
 let isPlaying = false;
@@ -15,6 +16,135 @@ let playInterval = null;
 let playSpeed = 3;
 let currentDrawingTool = null;
 let drawings = [];
+
+// 模式管理
+let maskCanvas = null;
+let maskCtx = null;
+// Canvas覆盖层相关变量
+let overlayCanvas = null;
+let overlayCtx = null;
+let lineStartPoint = null;
+let isDrawing = false;
+let lastThrottleTime = 0;
+const THROTTLE_INTERVAL = 50; // 50ms节流间隔
+
+// 创建Canvas覆盖层
+function createCanvasOverlay(container) {
+    // 创建Canvas元素
+    overlayCanvas = document.createElement('canvas');
+    overlayCanvas.style.position = 'absolute';
+    overlayCanvas.style.top = '0';
+    overlayCanvas.style.left = '0';
+    overlayCanvas.style.pointerEvents = 'none'; // 让鼠标事件穿透到图表
+    overlayCanvas.style.zIndex = '10';
+    
+    // 设置Canvas尺寸
+    overlayCanvas.width = container.clientWidth;
+    overlayCanvas.height = container.clientHeight;
+    
+    // 获取绘制上下文
+    overlayCtx = overlayCanvas.getContext('2d');
+    
+    // 将Canvas添加到容器
+    container.appendChild(overlayCanvas);
+    
+    // 监听容器尺寸变化
+    const resizeObserver = new ResizeObserver(() => {
+        overlayCanvas.width = container.clientWidth;
+        overlayCanvas.height = container.clientHeight;
+    });
+    resizeObserver.observe(container);
+}
+
+// 创建遮罩画布
+function createMaskCanvas(container) {
+    maskCanvas = document.createElement('canvas');
+    maskCanvas.style.position = 'absolute';
+    maskCanvas.style.top = '0';
+    maskCanvas.style.left = '0';
+    maskCanvas.style.pointerEvents = 'none';
+    maskCanvas.style.zIndex = '5'; // 在图表之上，绘图层之下
+    
+    maskCtx = maskCanvas.getContext('2d');
+    container.appendChild(maskCanvas);
+    
+    function resizeMaskCanvas() {
+        const rect = container.getBoundingClientRect();
+        maskCanvas.width = rect.width;
+        maskCanvas.height = rect.height;
+        maskCanvas.style.width = rect.width + 'px';
+        maskCanvas.style.height = rect.height + 'px';
+    }
+    
+    resizeMaskCanvas();
+    window.addEventListener('resize', resizeMaskCanvas);
+}
+
+// 更新遮罩
+function updateMask() {
+    if (!maskCanvas || !maskCtx || !klineData.length) {
+        return;
+    }
+    
+    // 清除之前的遮罩
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    
+    if (currentIndex >= klineData.length - 1) return;
+    
+    // 获取当前K线的时间坐标
+    const currentTime = klineData[currentIndex].time;
+    const currentX = chart.timeScale().timeToCoordinate(currentTime);
+    
+    if (currentX !== null) {
+        // 绘制遮罩（从当前K线右侧到图表右边缘）
+        maskCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        maskCtx.fillRect(currentX + 10, 0, maskCanvas.width - currentX - 10, maskCanvas.height);
+        
+        // 添加边界线
+        maskCtx.strokeStyle = '#007bff';
+        maskCtx.lineWidth = 2;
+        maskCtx.beginPath();
+        maskCtx.moveTo(currentX + 10, 0);
+        maskCtx.lineTo(currentX + 10, maskCanvas.height);
+        maskCtx.stroke();
+    }
+}
+
+// 在Canvas上绘制临时线段
+function drawTempLineOnCanvas(startX, startY, endX, endY) {
+    if (!overlayCtx) return;
+    
+    // 清除Canvas
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    
+    // 设置线段样式
+    overlayCtx.strokeStyle = '#ffff00';
+    overlayCtx.lineWidth = 2;
+    overlayCtx.setLineDash([]);
+    
+    // 绘制线段
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(startX, startY);
+    overlayCtx.lineTo(endX, endY);
+    overlayCtx.stroke();
+}
+
+// 清除Canvas上的临时线段
+function clearTempLine() {
+    if (!overlayCtx) return;
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+}
+
+// 节流函数
+function throttle(func, interval) {
+    return function(...args) {
+        const now = Date.now();
+        if (now - lastThrottleTime >= interval) {
+            lastThrottleTime = now;
+            func.apply(this, args);
+        }
+    };
+}
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -29,6 +159,137 @@ function goBack() {
     window.location.href = 'index.html';
 }
 
+// 移除不再使用的currentLine变量
+
+// 处理Canvas绘图逻辑
+function handleCanvasDrawing(param) {
+    if (!currentDrawingTool || !param.point) return;
+    
+    if (currentDrawingTool === 'line') {
+        if (!isDrawing) {
+            // 开始绘制 - 记录起始点
+            const startPrice = candlestickSeries.coordinateToPrice(param.point.y);
+            // 如果param.time为undefined，使用坐标转换获取时间
+            const startTime = param.time || chart.timeScale().coordinateToTime(param.point.x);
+            
+            // 验证时间和价格数据有效性
+            if (!startTime || startPrice === null || startPrice === undefined || !isFinite(startPrice)) {
+                console.error('Invalid start data:', { time: startTime, price: startPrice });
+                updateStatus('绘制失败：请在有效的图表区域内点击');
+                return;
+            }
+            
+            lineStartPoint = {
+                x: param.point.x,
+                y: param.point.y,
+                time: startTime,
+                price: startPrice
+            };
+            isDrawing = true;
+            
+            console.log('Canvas line start:', lineStartPoint);
+            updateStatus('请选择终点绘制线段');
+        } else {
+            // 结束绘制 - 创建最终LineSeries
+            const endPrice = candlestickSeries.coordinateToPrice(param.point.y);
+            // 如果param.time为undefined，使用坐标转换获取时间
+            const endTime = param.time || chart.timeScale().coordinateToTime(param.point.x);
+            
+            // 验证时间和价格数据有效性
+            if (!endTime || endPrice === null || endPrice === undefined || !isFinite(endPrice)) {
+                console.error('Invalid end data:', { time: endTime, price: endPrice });
+                updateStatus('绘制失败：请在有效的图表区域内点击');
+                isDrawing = false;
+                clearTempLine();
+                return;
+            }
+            
+            const endPoint = {
+                x: param.point.x,
+                y: param.point.y,
+                time: endTime,
+                price: endPrice
+            };
+            
+            console.log('Canvas line end:', endPoint);
+            
+            // 立即重置绘图状态，停止Canvas实时绘制
+            isDrawing = false;
+            
+            // 立即清除Canvas临时线段，避免与LineSeries重叠
+            clearTempLine();
+            
+            // 等待一帧确保Canvas清除完成
+            requestAnimationFrame(() => {
+                // 验证数据有效性，避免null值错误
+                if (!lineStartPoint.time || !endPoint.time || 
+                    lineStartPoint.price === null || endPoint.price === null) {
+                    console.error('Invalid line data:', { lineStartPoint, endPoint });
+                    updateStatus('绘制失败：数据无效');
+                    return;
+                }
+                
+                // 创建最终的LineSeries
+                const lineData = [
+                    { time: lineStartPoint.time, value: lineStartPoint.price },
+                    { time: endPoint.time, value: endPoint.price }
+                ];
+                
+                console.log('Creating LineSeries with data:', lineData);
+                
+                const lineSeries = chart.addLineSeries({
+                    color: '#ffff00', // 与临时线段颜色保持一致
+                    lineWidth: 2,
+                    priceLineVisible: false, // 不显示价格线
+                    lastValueVisible: false, // 不显示最后价格标签
+                    autoscaleInfoProvider: () => null // 不影响y轴缩放
+                });
+                
+                lineSeries.setData(lineData);
+                 
+                 // 保存绘图信息
+                 drawings.push({
+                     type: 'line',
+                     series: lineSeries,
+                     data: lineData,
+                     startPoint: lineStartPoint,
+                     endPoint: endPoint
+                 });
+            
+                // 重置绘图状态
+                lineStartPoint = null;
+                
+                console.log('Canvas line created:', drawings[drawings.length - 1]);
+                updateStatus('线段绘制完成');
+                
+                // 自动取消选择画线工具
+                currentDrawingTool = null;
+                document.querySelectorAll('.chart-tool-item').forEach(t => t.classList.remove('active'));
+            }); // 结束requestAnimationFrame回调
+        }
+    }
+
+    // 原来的箭头标记
+    if (currentDrawingTool === 'arrow-up' || currentDrawingTool === 'arrow-down') {
+        const price = candlestickSeries.coordinateToPrice(param.point.y);
+        const time = chart.timeScale().coordinateToTime(param.point.x);
+        
+        if (!price || !time) return;
+        
+        const marker = {
+            time: time,
+            position: currentDrawingTool === 'arrow-up' ? 'belowBar' : 'aboveBar',
+            color: currentDrawingTool === 'arrow-up' ? '#4bffb5' : '#ff4976',
+            shape: currentDrawingTool === 'arrow-up' ? 'arrowUp' : 'arrowDown',
+            text: currentDrawingTool === 'arrow-up' ? '上涨' : '下跌'
+        };
+        
+        candlestickSeries.setMarkers([...candlestickSeries.markers || [], marker]);
+        drawings.push(marker);
+    }
+}
+
+
 // 清除绘图
 function clearDrawings() {
     // 这里可以添加清除绘图的逻辑
@@ -41,9 +302,12 @@ function selectDrawingTool(toolType) {
     // 这里可以添加绘图工具的逻辑
 }
 
-// 随机日期
+// 随机日期函数
 function randomDate() {
-    if (!klineData || klineData.length === 0) return;
+    if (!klineData || klineData.length === 0) {
+        updateStatus('没有数据可用');
+        return;
+    }
     
     // 找到所有bar_count=1的数据点（开盘时刻）
     const openingBars = [];
@@ -69,6 +333,9 @@ function randomDate() {
     updateChart();
     updateInfo();
     updateProgress();
+    
+    const startDate = new Date(klineData[currentIndex].time * 1000);
+    updateStatus(`随机复盘: ${startDate.toLocaleString()}`);
 }
 
 // 上一根K线
@@ -184,6 +451,12 @@ function jumpToDate() {
 function initializeChart() {
     const container = document.getElementById('chartContainer');
     
+    // 创建Canvas覆盖层
+    createCanvasOverlay(container);
+    
+    // 创建遮罩画布
+    createMaskCanvas(container);
+    
     chart = LightweightCharts.createChart(container, {
         width: container.clientWidth,
         height: container.clientHeight,
@@ -213,6 +486,14 @@ function initializeChart() {
             barSpacing: 12,
             fixLeftEdge: false,
             fixRightEdge: false,
+            tickMarkFormatter: (time) => {
+                const date = new Date(time * 1000);
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const day = date.getDate().toString().padStart(2, '0');
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                return `${month}-${day} ${hours}:${minutes}`;
+            },
         },
         // 设置时区为上海时间，让UTC时间戳按本地时间显示
         localization: {
@@ -223,6 +504,8 @@ function initializeChart() {
             },
         },
     });
+
+
 
     candlestickSeries = chart.addCandlestickSeries({
         upColor: '#ffffff',
@@ -276,7 +559,7 @@ function initializeChart() {
     // 图表点击事件（用于绘图）
     chart.subscribeClick((param) => {
         if (currentDrawingTool && param.point) {
-            handleDrawing(param);
+            handleCanvasDrawing(param);
         }
     });
 
@@ -285,9 +568,29 @@ function initializeChart() {
         updateCurrentPrice();
     });
     
-    // 十字线移动事件监听
-    chart.subscribeCrosshairMove((param) => {
+    // 十字线移动事件监听 - 使用节流优化性能
+    const throttledCrosshairMove = throttle((param) => {
         updateCrosshairInfo(param);
+        
+        // 处理Canvas实时绘制
+        if (currentDrawingTool === 'line' && isDrawing && lineStartPoint && param.point) {
+            const startX = lineStartPoint.x;
+            const startY = lineStartPoint.y;
+            const endX = param.point.x;
+            const endY = param.point.y;
+            
+            drawTempLineOnCanvas(startX, startY, endX, endY);
+        }
+    }, THROTTLE_INTERVAL);
+    
+    chart.subscribeCrosshairMove(throttledCrosshairMove);
+    
+    // 监听时间轴变化，当用户拖动或缩放图表时更新遮罩
+    chart.timeScale().subscribeVisibleTimeRangeChange(() => {
+        // 使用节流避免频繁更新
+        setTimeout(() => {
+            updateMask();
+        }, 10);
     });
 }
 
@@ -361,8 +664,13 @@ async function loadData() {
             throw new Error('没有有效的K线数据');
         }
 
-        // 初始化随机显示一天的K线
-        randomDate();
+
+
+
+        
+        // 初始化：设置为最后一根K线
+        currentIndex = klineData.length - 1;
+        updateChart();
         updateStatus('数据加载完成');
         
     } catch (error) {
@@ -376,13 +684,15 @@ async function loadData() {
 function updateChart() {
     if (!candlestickSeries || klineData.length === 0) return;
 
-    // 显示从开始到当前索引的所有数据
-    const visibleData = klineData.slice(0, currentIndex + 1);
+    // 始终显示全部数据，复盘模式通过遮罩隐藏未来K线
+    const visibleData = klineData;
+    
     candlestickSeries.setData(visibleData);
     
-    // 添加bar_count文本标记 - 只显示偶数数字，无背景圆圈
+    // 添加bar_count文本标记 - 只显示偶数数字，无背景圆圈，只显示到当前索引
     if (candlestickSeries && visibleData.length > 0) {
-        const markers = visibleData
+        const markerVisibleData = visibleData.slice(0, currentIndex + 1);
+        const markers = markerVisibleData
             .filter(item => item.barCount % 2 === 0) // 只显示偶数
             .map(item => {
                 const isMultipleOfSix = item.barCount % 6 === 0;
@@ -398,9 +708,10 @@ function updateChart() {
         candlestickSeries.setMarkers(markers);
     }
     
-    // 更新EMA20数据
+    // 更新EMA20数据 - 只显示到当前索引
     if (ema20Series && visibleData.length > 0) {
-        const ema20Data = visibleData
+        const emaVisibleData = visibleData.slice(0, currentIndex + 1);
+        const ema20Data = emaVisibleData
             .filter(item => item.ema20 !== null && !isNaN(item.ema20))
             .map(item => ({
                 time: item.time,
@@ -409,9 +720,10 @@ function updateChart() {
         ema20Series.setData(ema20Data);
     }
     
-    // 更新EMA220数据
+    // 更新EMA220数据 - 只显示到当前索引
     if (ema220Series && visibleData.length > 0) {
-        const ema220Data = visibleData
+        const emaVisibleData = visibleData.slice(0, currentIndex + 1);
+        const ema220Data = emaVisibleData
             .filter(item => item.ema220 !== null && !isNaN(item.ema220))
             .map(item => ({
                 time: item.time,
@@ -420,19 +732,26 @@ function updateChart() {
         ema220Series.setData(ema220Data);
     }
     
-    // 不自动调整视窗位置，保持用户手动设置的视图范围
-    // 只在初次加载时设置默认视图
-    if (visibleData.length === 1) {
-        // 第一根K线时设置初始视图
+    // 设置固定的时间范围，让时间轴显示连续刻度
+    if (visibleData.length === 1 && klineData.length > 0) {
+        // 第一根K线时设置一个较大的时间范围，包含更多时间刻度
+        const firstTime = klineData[0].time;
+        const lastTime = klineData[klineData.length - 1].time;
+        const timeRange = lastTime - firstTime;
+        const extendedRange = timeRange * 0.1; // 扩展10%的时间范围
+        
         chart.timeScale().setVisibleRange({
-            from: visibleData[0].time,
-            to: visibleData[0].time,
+            from: firstTime - extendedRange,
+            to: lastTime + extendedRange,
         });
     }
     // 其他情况下不调整视窗，让用户保持当前的视图位置
     
     updateCurrentTime();
     updateCurrentPrice();
+    
+    // 更新遮罩
+    updateMask();
 }
 
 // 设置事件监听器
@@ -462,10 +781,10 @@ function setupEventListeners() {
     }
     
     // 绘图工具
-    document.querySelectorAll('.tool-item[data-tool]').forEach(tool => {
+    document.querySelectorAll('.chart-tool-item[data-tool]').forEach(tool => {
         tool.addEventListener('click', function() {
             // 移除其他工具的active状态
-            document.querySelectorAll('.tool-item').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.chart-tool-item').forEach(t => t.classList.remove('active'));
             // 添加当前工具的active状态
             this.classList.add('active');
             
@@ -623,44 +942,32 @@ function getToolName(tool) {
     return names[tool] || tool;
 }
 
-// 处理绘图
-function handleDrawing(param) {
-    if (!currentDrawingTool || !param.point) return;
-    
-    const price = candlestickSeries.coordinateToPrice(param.point.y);
-    const time = chart.timeScale().coordinateToTime(param.point.x);
-    
-    if (!price || !time) return;
-    
-    // 这里可以实现具体的绘图逻辑
-    // 由于lightweight-charts的绘图功能有限，这里只做基础实现
-    console.log(`绘制 ${currentDrawingTool} 在位置:`, { time, price });
-    
-    // 添加标记点（简单实现）
-    if (currentDrawingTool === 'arrow-up' || currentDrawingTool === 'arrow-down') {
-        const marker = {
-            time: time,
-            position: currentDrawingTool === 'arrow-up' ? 'belowBar' : 'aboveBar',
-            color: currentDrawingTool === 'arrow-up' ? '#4bffb5' : '#ff4976',
-            shape: currentDrawingTool === 'arrow-up' ? 'arrowUp' : 'arrowDown',
-            text: currentDrawingTool === 'arrow-up' ? '上涨' : '下跌'
-        };
-        
-        candlestickSeries.setMarkers([...candlestickSeries.markers || [], marker]);
-        drawings.push(marker);
-    }
-    
-    updateStatus(`已绘制 ${getToolName(currentDrawingTool)}`);
-}
 
 // 清除所有绘图
 function clearAllDrawings() {
+    // 删除所有LineSeries
+    drawings.forEach(d => {
+        if (d.series && d.series.remove) {
+            d.series.remove();
+        }
+    });
+    drawings = [];
+
+    // 删除所有标记
     if (candlestickSeries) {
         candlestickSeries.setMarkers([]);
     }
-    drawings = [];
+
+    // 清除Canvas临时线段
+    clearTempLine();
+    
+    // 重置绘图状态
+    lineStartPoint = null;
+    isDrawing = false;
+    
     updateStatus('已清除所有绘图');
 }
+
 
 // 键盘快捷键
 function handleKeyboard(e) {
@@ -764,7 +1071,21 @@ function updateInfo() {
             currentPriceElement.textContent = currentCandle.close.toFixed(2);
         }
     }
+    
+    // 更新日期范围显示
+    if (klineData.length > 0) {
+        const startDate = new Date(klineData[0].time * 1000);
+        const endDate = new Date(klineData[klineData.length - 1].time * 1000);
+        const startDateElement = document.getElementById('startDate');
+        const endDateElement = document.getElementById('endDate');
+        if (startDateElement) startDateElement.textContent = startDate.toLocaleDateString();
+        if (endDateElement) endDateElement.textContent = endDate.toLocaleDateString();
+    }
+    
+
 }
+
+
 
 // 更新进度条
 function updateProgress() {
