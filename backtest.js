@@ -5,6 +5,7 @@ const path = require('path');
 // 全局变量
 let chart = null;
 let candlestickSeries = null;
+let barCountSeries = null;
 let klineData = [];
 let currentIndex = 0;
 let isPlaying = false;
@@ -207,6 +208,8 @@ function initializeChart() {
         wickUpColor: '#000000',
     });
 
+    // bar_count将通过文本标记显示，不需要独立的线系列
+
     // 响应式调整
     window.addEventListener('resize', () => {
         chart.applyOptions({ 
@@ -266,6 +269,7 @@ async function loadData() {
                     const high = parseFloat(values[3]);
                     const low = parseFloat(values[4]);
                     const volume = parseFloat(values[5]);
+                    const barCount = parseFloat(values[7]); // 解析bar_count数据
 
                     if (!isNaN(timestamp) && !isNaN(open) && !isNaN(high) && !isNaN(low) && !isNaN(close)) {
                         klineData.push({
@@ -274,7 +278,8 @@ async function loadData() {
                             high: high,
                             low: low,
                             close: close,
-                            volume: volume || 0
+                            volume: volume || 0,
+                            barCount: barCount || 0
                         });
                     }
                 } catch (e) {
@@ -312,6 +317,24 @@ function updateChart() {
     // 显示从开始到当前索引的所有数据
     const visibleData = klineData.slice(0, currentIndex + 1);
     candlestickSeries.setData(visibleData);
+    
+    // 添加bar_count文本标记 - 只显示偶数数字，无背景圆圈
+    if (candlestickSeries && visibleData.length > 0) {
+        const markers = visibleData
+            .filter(item => item.barCount % 2 === 0) // 只显示偶数
+            .map(item => {
+                const isMultipleOfSix = item.barCount % 6 === 0;
+                return {
+                    time: item.time,
+                    position: 'belowBar', // 显示在K线下方
+                    color: isMultipleOfSix ? '#e91e63' : '#888888', // 6的倍数红色，其他灰色
+                    shape: 'text', // 只显示文本，无背景形状
+                    text: item.barCount.toString(), // 显示bar_count数字
+                    size: 0 // 设置为0以移除背景形状
+                };
+            });
+        candlestickSeries.setMarkers(markers);
+    }
     
     // 优化缩放：以右边最新K线为中心，显示合适数量的K线
     if (visibleData.length > 0) {
