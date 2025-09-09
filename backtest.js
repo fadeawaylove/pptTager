@@ -184,10 +184,17 @@ function initializeChart() {
             timeVisible: true,
             secondsVisible: false,
             rightOffset: 12,
-            barSpacing: 8,
+            barSpacing: 12,
             fixLeftEdge: false,
             fixRightEdge: false,
-            timeZone: 'Asia/Shanghai',
+        },
+        // 设置时区为上海时间，让UTC时间戳按本地时间显示
+        localization: {
+            locale: 'zh-CN',
+            timeFormatter: (time) => {
+                const date = new Date(time * 1000);
+                return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+            },
         },
     });
 
@@ -250,7 +257,10 @@ async function loadData() {
             const values = lines[i].split(',');
             if (values.length >= 6) {
                 try {
-                    const timestamp = new Date(values[8].trim()).getTime() / 1000;
+                    // 修复：使用第8列的datetime而不是第0列的index
+                    // 直接用JS Date解析，配合timezone配置显示正确时间
+                    const originalDate = new Date(values[8].trim());
+                    const timestamp = Math.floor(originalDate.getTime() / 1000);
                     const open = parseFloat(values[1]);
                     const close = parseFloat(values[2]);
                     const high = parseFloat(values[3]);
@@ -303,15 +313,19 @@ function updateChart() {
     const visibleData = klineData.slice(0, currentIndex + 1);
     candlestickSeries.setData(visibleData);
     
-    // 设置图表可见范围，只显示最近的80根K线
+    // 优化缩放：以右边最新K线为中心，显示合适数量的K线
     if (visibleData.length > 0) {
         const visibleBars = Math.min(80, visibleData.length);
-        const fromIndex = Math.max(0, visibleData.length - visibleBars);
+        const currentBarIndex = visibleData.length - 1; // 当前最新K线的索引
         
-        if (fromIndex < visibleData.length) {
+        // 计算显示范围，以最新K线为右边界
+        const fromIndex = Math.max(0, currentBarIndex - visibleBars + 1);
+        const toIndex = currentBarIndex;
+        
+        if (fromIndex <= toIndex && toIndex < visibleData.length) {
             chart.timeScale().setVisibleRange({
                 from: visibleData[fromIndex].time,
-                to: visibleData[visibleData.length - 1].time,
+                to: visibleData[toIndex].time,
             });
         }
     }
@@ -587,7 +601,13 @@ function updateUI() {
 function updateCurrentTime() {
     if (klineData.length > 0 && currentIndex < klineData.length) {
         const currentTime = new Date(klineData[currentIndex].time * 1000);
-        document.getElementById('currentTime').textContent = currentTime.toLocaleString();
+        // 使用明确的格式化方式，确保显示正确的时间格式
+        const year = currentTime.getFullYear();
+        const month = (currentTime.getMonth() + 1).toString().padStart(2, '0');
+        const day = currentTime.getDate().toString().padStart(2, '0');
+        const hour = currentTime.getHours().toString().padStart(2, '0');
+        const minute = currentTime.getMinutes().toString().padStart(2, '0');
+        document.getElementById('currentTime').textContent = `${year}/${month}/${day} ${hour}:${minute}`;
     }
 }
 
