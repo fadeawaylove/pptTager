@@ -6,6 +6,8 @@ const path = require('path');
 let chart = null;
 let candlestickSeries = null;
 let barCountSeries = null;
+let ema20Series = null;
+let ema220Series = null;
 let klineData = [];
 let currentIndex = 0;
 let isPlaying = false;
@@ -208,6 +210,24 @@ function initializeChart() {
         wickUpColor: '#000000',
     });
 
+    // 添加EMA20线系列 - 细红线
+    ema20Series = chart.addLineSeries({
+        color: '#FF0000', // 红色
+        lineWidth: 1, // 细线
+        priceLineVisible: false, // 不显示价格线
+        lastValueVisible: false, // 不显示最后数值
+        autoscaleInfoProvider: () => null, // 不参与自动缩放
+    });
+
+    // 添加EMA220线系列 - 灰色实线
+    ema220Series = chart.addLineSeries({
+        color: '#888888', // 灰色
+        lineWidth: 1,
+        priceLineVisible: false, // 不显示价格线
+        lastValueVisible: false, // 不显示最后数值
+        autoscaleInfoProvider: () => null, // 不参与自动缩放
+    });
+
     // bar_count将通过文本标记显示，不需要独立的线系列
 
     // 响应式调整
@@ -270,6 +290,8 @@ async function loadData() {
                     const low = parseFloat(values[4]);
                     const volume = parseFloat(values[5]);
                     const barCount = parseFloat(values[7]); // 解析bar_count数据
+                    const ema20 = parseFloat(values[9]); // 解析EMA20数据
+                    const ema220 = parseFloat(values[10]); // 解析EMA220数据
 
                     if (!isNaN(timestamp) && !isNaN(open) && !isNaN(high) && !isNaN(low) && !isNaN(close)) {
                         klineData.push({
@@ -279,7 +301,9 @@ async function loadData() {
                             low: low,
                             close: close,
                             volume: volume || 0,
-                            barCount: barCount || 0
+                            barCount: barCount || 0,
+                            ema20: ema20 || null,
+                            ema220: ema220 || null
                         });
                     }
                 } catch (e) {
@@ -334,6 +358,28 @@ function updateChart() {
                 };
             });
         candlestickSeries.setMarkers(markers);
+    }
+    
+    // 更新EMA20数据
+    if (ema20Series && visibleData.length > 0) {
+        const ema20Data = visibleData
+            .filter(item => item.ema20 !== null && !isNaN(item.ema20))
+            .map(item => ({
+                time: item.time,
+                value: item.ema20
+            }));
+        ema20Series.setData(ema20Data);
+    }
+    
+    // 更新EMA220数据
+    if (ema220Series && visibleData.length > 0) {
+        const ema220Data = visibleData
+            .filter(item => item.ema220 !== null && !isNaN(item.ema220))
+            .map(item => ({
+                time: item.time,
+                value: item.ema220
+            }));
+        ema220Series.setData(ema220Data);
     }
     
     // 优化缩放：以右边最新K线为中心，显示合适数量的K线
