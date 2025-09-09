@@ -200,6 +200,10 @@ function initializeChart() {
         },
         rightPriceScale: {
             borderColor: '#e0e0e0',
+            scaleMargins: {
+                top: 0.05,    // 上边距10%
+                bottom: 0.05, // 下边距10%
+            },
         },
         timeScale: {
             borderColor: '#e0e0e0',
@@ -227,6 +231,11 @@ function initializeChart() {
         borderUpColor: '#000000',
         wickDownColor: '#000000',
         wickUpColor: '#000000',
+        priceFormat: {
+            type: 'price',
+            precision: 0,   // 小数位数
+            minMove: 1      // 最小价格跳动单位
+        }
     });
 
     // 添加EMA20线系列 - 细红线
@@ -235,6 +244,7 @@ function initializeChart() {
         lineWidth: 1, // 细线
         priceLineVisible: false, // 不显示价格线
         lastValueVisible: false, // 不显示最后数值
+        crosshairMarkerVisible: false, // 不显示十字线交点
         autoscaleInfoProvider: () => null, // 不参与自动缩放
     });
 
@@ -244,6 +254,7 @@ function initializeChart() {
         lineWidth: 1,
         priceLineVisible: false, // 不显示价格线
         lastValueVisible: false, // 不显示最后数值
+        crosshairMarkerVisible: false, // 不显示十字线交点
         autoscaleInfoProvider: () => null, // 不参与自动缩放
     });
 
@@ -267,6 +278,11 @@ function initializeChart() {
     // 价格变化监听
     candlestickSeries.subscribeDataChanged(() => {
         updateCurrentPrice();
+    });
+    
+    // 十字线移动事件监听
+    chart.subscribeCrosshairMove((param) => {
+        updateCrosshairInfo(param);
     });
 }
 
@@ -755,6 +771,69 @@ function updateProgress() {
 }
 
 // 页面卸载时清理
+// 更新十字线信息显示
+function updateCrosshairInfo(param) {
+    const crosshairInfo = document.getElementById('crosshairInfo');
+    const timeInfo = document.getElementById('timeInfo');
+    const highInfo = document.getElementById('highInfo');
+    const lowInfo = document.getElementById('lowInfo');
+    const openInfo = document.getElementById('openInfo');
+    const closeInfo = document.getElementById('closeInfo');
+    const rangeInfo = document.getElementById('rangeInfo');
+    const ema20Info = document.getElementById('ema20Info');
+    const ema220Info = document.getElementById('ema220Info');
+    
+    if (!param.time || !param.point) {
+        crosshairInfo.style.display = 'none';
+        return;
+    }
+    
+    // 获取当前时间对应的数据
+    const candleData = param.seriesData.get(candlestickSeries);
+    const ema20Data = param.seriesData.get(ema20Series);
+    const ema220Data = param.seriesData.get(ema220Series);
+    
+    if (candleData) {
+        crosshairInfo.style.display = 'block';
+        
+        // 格式化时间
+        const date = new Date(param.time * 1000);
+        const timeStr = date.toLocaleString('zh-CN', { 
+            timeZone: 'Asia/Shanghai',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        // 计算幅度 - 最高减最低的绝对值
+        const range = Math.abs(candleData.high - candleData.low).toFixed(2);
+        
+        // 显示各项信息
+        timeInfo.textContent = timeStr;
+        highInfo.innerHTML = `<span style="color: #ff6b6b;">高: ${Math.round(candleData.high)}</span>`;
+        lowInfo.innerHTML = `<span style="color: #4ecdc4;">低: ${Math.round(candleData.low)}</span>`;
+        openInfo.innerHTML = `开: ${Math.round(candleData.open)}`;
+        closeInfo.innerHTML = `收: ${Math.round(candleData.close)}`;
+        rangeInfo.innerHTML = `幅: ${range}`;
+        
+        // 显示EMA信息
+        if (ema20Data && ema20Data.value !== null) {
+            ema20Info.innerHTML = `<span style="color: #ff9500;">20: ${ema20Data.value.toFixed(2)}</span>`;
+        } else {
+            ema20Info.innerHTML = '<span style="color: #ff9500;">20: --</span>';
+        }
+        
+        if (ema220Data && ema220Data.value !== null) {
+            ema220Info.innerHTML = `<span style="color: #999;">220: ${ema220Data.value.toFixed(2)}</span>`;
+        } else {
+            ema220Info.innerHTML = '<span style="color: #999;">220: --</span>';
+        }
+    } else {
+        crosshairInfo.style.display = 'none';
+    }
+}
+
 window.addEventListener('beforeunload', () => {
     if (playInterval) {
         clearInterval(playInterval);

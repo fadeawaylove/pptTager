@@ -237,6 +237,32 @@
             border-radius: 50%;
             cursor: pointer;
         }
+        
+        /* 十字线信息面板样式 - 窄矩形 */
+        .crosshair-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            color: #000;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            width: 120px;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        
+        .info-line {
+            white-space: nowrap;
+            font-size: 10px;
+            line-height: 1.2;
+        }
     </style>
 </head>
 <body>
@@ -338,6 +364,17 @@
             <!-- 图表区域 -->
             <div class="chart-area">
                 <div id="chartContainer" class="chart-container"></div>
+                <!-- 十字线信息显示面板 -->
+                <div id="crosshairInfo" class="crosshair-info" style="display: none;">
+                    <div class="info-line" id="timeInfo"></div>
+                    <div class="info-line" id="highInfo"></div>
+                    <div class="info-line" id="lowInfo"></div>
+                    <div class="info-line" id="openInfo"></div>
+                    <div class="info-line" id="closeInfo"></div>
+                    <div class="info-line" id="rangeInfo"></div>
+                    <div class="info-line" id="ema20Info"></div>
+                    <div class="info-line" id="ema220Info"></div>
+                </div>
             </div>
 
             <!-- 状态栏 -->
