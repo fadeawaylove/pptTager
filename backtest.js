@@ -45,8 +45,27 @@ function selectDrawingTool(toolType) {
 function randomDate() {
     if (!klineData || klineData.length === 0) return;
     
-    const randomIndex = Math.floor(Math.random() * klineData.length);
-    currentIndex = randomIndex;
+    // 找到所有bar_count=1的数据点（开盘时刻）
+    const openingBars = [];
+    for (let i = 0; i < klineData.length; i++) {
+        if (klineData[i].barCount === 1) {
+            openingBars.push(i);
+        }
+    }
+    
+    if (openingBars.length === 0) {
+        // 如果没有找到bar_count=1的数据，使用原来的随机逻辑
+        const randomIndex = Math.floor(Math.random() * klineData.length);
+        currentIndex = randomIndex;
+    } else {
+        // 随机选择一个开盘时刻
+        const randomOpeningIndex = openingBars[Math.floor(Math.random() * openingBars.length)];
+        
+        // 设置为该开盘时刻前一根K线的位置（不包括bar_count=1这根K线）
+        // 这样updateChart会显示从0到randomOpeningIndex-1的所有K线
+        currentIndex = Math.max(0, randomOpeningIndex - 1);
+    }
+    
     updateChart();
     updateInfo();
     updateProgress();
@@ -321,10 +340,8 @@ async function loadData() {
             throw new Error('没有有效的K线数据');
         }
 
-        // 初始化显示第一根K线
-        currentIndex = 0;
-        updateChart();
-        updateDataInfo();
+        // 初始化随机显示一天的K线
+        randomDate();
         updateStatus('数据加载完成');
         
     } catch (error) {
